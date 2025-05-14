@@ -8,9 +8,8 @@ This is a **Scipion** plugin that offers different tools from the
 `FPocket suite <https://github.com/Discngine/fpocket>`_.
 These tools will make it possible to carry out different functions for predicting protein pockets.
 
-YOu can find further information on the
-`plugin documentation <https://github.com/scipion-chem/docs/blob/master/plugins/chem-fpocket.rst>`_.
-
+You can find further information on the
+`plugin documentation <https://scipion-chem.github.io/docs/plugins/fpocket/index.html>`_.
 
 ==========================
 Install this plugin
