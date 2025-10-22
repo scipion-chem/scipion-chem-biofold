@@ -30,4 +30,5 @@ CLUST_TYPES_CODES = ['s', 'm', 'a', 'c']
 DIST_TYPES = ['Euclidean', 'Manhattan']
 DIST_TYPES_CODES = ['e', 'b']
 
+FPOCKET_DIC = {'name': 'fpocket', 'version': '3.0', 'home': 'FPOCKET_HOME'}
 
