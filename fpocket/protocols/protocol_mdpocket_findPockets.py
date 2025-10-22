@@ -40,7 +40,7 @@ from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 #from pwem.protocols import protocol_define_manual_pockets
 
-from pwchem.objects import SetOfPockets, PredictPocketsOutput, ProteinPocket
+from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
 from pwchem.utils import *
 from fpocket import Plugin
 from fpocket.constants import *
@@ -60,25 +60,24 @@ class MDpocketAnalyze(EMProtocol):
                        label="Input atomic system: ",
                        help='Select the atom structure to search for pockets')
 
+        group = form.addGroup('Search parameters')
         form.addParam('transDruggable', params.BooleanParam,
                       label='Search transient druggable binding pockets: ',
                       help='Assess at what point the identified pocket is likely to bind drug like molecules.')
         form.addParam('choosePocket', params.BooleanParam,
-                      label='Choose pocket type for advanced search.',
+                      label='Choose pocket type for advanced search: ',
                       help='Select type of pocket.')
 
-        form.addSection(label='Pocket analysis parameters', condition='choosePocket' and not 'transDruggable')
         group = form.addGroup('Features')
-        group.addParam('isoValue', params.FloatParam, default=1.0,
-                       label='Selected Isovalue',
+        group.addParam('isoValue', params.FloatParam, default=1.0, condition='choosePocket' and not 'transDruggable',
+                       label='Selected Isovalue: ',
                        help='Selected Isovalue Threshold in Pocket Analysis for PDB output')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
+        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',  condition='choosePocket' and not 'transDruggable',
                        label='Maximum distance between pocket points (A): ',
                        help='Maximum distance between two pocket atoms to considered them same pocket')
-        group = form.addGroup('Pocket Type')
         group.addParam('pockType', params.EnumParam,
-                   choices=self._pocketTypes, default=0,
-                   label='Choose the type of pocket:',
+                   choices=self._pocketTypes, default=0,  condition='choosePocket' and not 'transDruggable',
+                   label='Pocket type:',
                    help='Detect different type of pockets with a set of specific inner parameters'
                    )
 
@@ -96,19 +95,20 @@ class MDpocketAnalyze(EMProtocol):
         if (self.transDruggable.get()): #use default pockets by force
             args += ['-S']
 
-        selPock = self.getEnumText('pockType')
+        if (self.choosePocket.get()):
+            selPock = self.getEnumText('pockType')
 
-        if selPock == 'Default Pockets':
-            pass
+            if selPock == 'Small molecule binding sites':
+                pass
 
-        elif selPock == 'Channels and small cavities':
-            args += [' -m 2.8 -M 5.5 -i 3']
+            if selPock == 'Channels and small cavities':
+                args += [' -m 2.8 -M 5.5 -i 3']
 
-        elif selPock == 'Water binding sites':
-            args += ['-m 3.5 -M 5.5 -i 3']
+            elif selPock == 'Water binding sites':
+                args += ['-m 3.5 -M 5.5 -i 3']
 
-        elif selPock == 'Big external pockets':
-            args += ['-m 3.5 -M 10.0 -i 3']
+            elif selPock == 'Big external pockets':
+                args += ['-m 3.5 -M 10.0 -i 3']
 
         args +=['-C']
 

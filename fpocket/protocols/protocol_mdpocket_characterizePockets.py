@@ -40,8 +40,8 @@ from pyworkflow.utils import Message
 from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SetOfPockets, PredictPocketsOutput, ProteinPocket
-from pwchem.utils import clean_PDB
+from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
+from pwchem.utils import cleanPDB
 
 from fpocket import Plugin
 from fpocket.constants import *
