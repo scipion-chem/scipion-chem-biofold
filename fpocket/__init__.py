@@ -24,18 +24,20 @@
 # *
 # **************************************************************************
 
-import pwem
 from os.path import join, exists
+
+import pwem
+from scipion.install.funcs import InstallHelper
+
+from pwchem import Plugin as pwchemPlugin
 from .constants import *
 
 _version_ = '0.1'
 _logo = "fpocket_logo.png"
 _references = ['']
 
-FPOCKET_DIC = {'name': 'fpocket', 'version': '3.0', 'home': 'FPOCKET_HOME'}
 
-
-class Plugin(pwem.Plugin):
+class Plugin(pwchemPlugin):
     _homeVar = FPOCKET_DIC['home']
     _pathVars = [FPOCKET_DIC['home']]
     _supportedVersions = [FPOCKET_DIC['version']]
@@ -47,30 +49,19 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(FPOCKET_DIC['home'], FPOCKET_DIC['name'] + '-' + FPOCKET_DIC['version'])
 
     @classmethod
-    def defineBinaries(cls, env):
-        installationCmd = ''
-        installationCmd += 'conda install -y -c conda-forge fpocket -p {} && '.\
-            format(join(pwem.Config.EM_ROOT, FPOCKET_DIC['name'] + '-' + FPOCKET_DIC['version']))
+    def defineBinaries(cls, env, default=True):
+        installer = InstallHelper(FPOCKET_DIC['name'], packageHome=cls.getVar(FPOCKET_DIC['home']),
+                                  packageVersion=FPOCKET_DIC['version'])
 
-        # Creating validation file
-        FPOCKET_INSTALLED = '%s_installed' % FPOCKET_DIC['name']
-        installationCmd += 'touch %s' % FPOCKET_INSTALLED  # Flag installation finished
-
-        env.addPackage(FPOCKET_DIC['name'],
-                       version=FPOCKET_DIC['version'],
-                       tar='void.tgz',
-                       commands=[(installationCmd, FPOCKET_INSTALLED)],
-                       neededProgs=["conda"],
-                       default=True)
+        fpocketPath = join(pwem.Config.EM_ROOT, cls.getEnvName(FPOCKET_DIC))
+        installer.addCommand(f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
+                             f'{FPOCKET_DIC["name"]}_installed').\
+            addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
     def runFpocket(cls, protocol, program, args, cwd=None):
         """ Run Fpocket command from a given protocol. """
         protocol.runJob(join(cls.getVar(FPOCKET_DIC['home']), 'bin/{}'.format(program)), args, cwd=cwd)
-
-    @classmethod  #  Test that
-    def getEnviron(cls):
-        pass
 
     # ---------------------------------- Utils functions  -----------------------
 
