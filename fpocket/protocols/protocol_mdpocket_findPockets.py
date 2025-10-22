@@ -50,7 +50,7 @@ class MDpocketAnalyze(EMProtocol):
     Executes the mdpocket software to look for protein pockets.
     """
     _label = 'Detect pockets'
-    _pocketTypes = ['Default Pockets', 'Druggable Pockets', 'Channels and small cavities', 'Water binding sites', 'Big external pockets']
+    _pocketTypes = ['Small molecule binding sites', 'Putative channels and small cavities', 'Water binding sites', 'Big external pockets']
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
@@ -60,13 +60,20 @@ class MDpocketAnalyze(EMProtocol):
                        label="Input atomic system: ",
                        help='Select the atom structure to search for pockets')
 
-        form.addSection(label='Pocket analysis parameters',  expertLevel=params.LEVEL_ADVANCED)
-        group = form.addGroup('Features',  expertLevel=params.LEVEL_ADVANCED)
+        form.addParam('transDruggable', params.BooleanParam,
+                      label='Search transient druggable binding pockets: ',
+                      help='Assess at what point the identified pocket is likely to bind drug like molecules.')
+        form.addParam('choosePocket', params.BooleanParam,
+                      label='Choose pocket type for advanced search.',
+                      help='Select type of pocket.')
+
+        form.addSection(label='Pocket analysis parameters', condition='choosePocket' and not 'transDruggable')
+        group = form.addGroup('Features')
         group.addParam('isoValue', params.FloatParam, default=1.0,
-                       label='Selected Isovalue',  expertLevel=params.LEVEL_ADVANCED,
+                       label='Selected Isovalue',
                        help='Selected Isovalue Threshold in Pocket Analysis for PDB output')
         group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
-                       label='Maximum distance between pocket points (A): ',  expertLevel=params.LEVEL_ADVANCED,
+                       label='Maximum distance between pocket points (A): ',
                        help='Maximum distance between two pocket atoms to considered them same pocket')
         group = form.addGroup('Pocket Type')
         group.addParam('pockType', params.EnumParam,
@@ -85,15 +92,14 @@ class MDpocketAnalyze(EMProtocol):
         pdbFile = os.path.abspath(self.inputSystem.get().getSystemFile())
         args += ['-f', pdbFile]
 
+        #todo change this logic to follow new input params
+        if (self.transDruggable.get()): #use default pockets by force
+            args += ['-S']
+
         selPock = self.getEnumText('pockType')
-
-
 
         if selPock == 'Default Pockets':
             pass
-
-        elif selPock == 'Druggable Pockets':
-            args += ['-S']
 
         elif selPock == 'Channels and small cavities':
             args += [' -m 2.8 -M 5.5 -i 3']
@@ -172,7 +178,6 @@ class MDpocketAnalyze(EMProtocol):
         return methods
 
     def _warnings(self):
-        """ Try to find warnings on define params. """
         warnings = []
         return warnings
 
@@ -193,29 +198,6 @@ class MDpocketAnalyze(EMProtocol):
         with open(outFile, 'w') as f:
             for j, coord in enumerate(clust):
                 f.write(writePDBLine(['HETATM', str(j + 1), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-                #f.write(writePDBLine(['ATOM', str(j+1), '', 'C', 'PTH', '1', *coord, 0.0, 0.0, '', 'C']))
 
             f.write('\nEND')
         return outFile
-
-    # def clusterCoords(coords, maxDist):
-    #     clusters = []
-    #     for coord in coords:
-    #         newClusters = []
-    #         newClust = [coord]
-    #         for clust in clusters:
-    #             merge = False
-    #             for cCoord in clust:
-    #                 dist = calculateDistance(coord, cCoord)
-    #                 if dist < maxDist:
-    #                     merge = True
-    #                     break
-    #
-    #             if merge:
-    #                 newClust += clust
-    #             else:
-    #                 newClusters.append(clust)
-    #
-    #         newClusters.append(newClust)
-    #         clusters = newClusters.copy()
-    #     return clusters
