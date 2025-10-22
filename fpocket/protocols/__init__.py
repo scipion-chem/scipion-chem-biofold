@@ -4,7 +4,7 @@
 # Find documentation here: https://scipion-em.github.io/docs/docs/developer/creating-a-protocol
 # **************************************************************************
 
-from .protocol_fpocket import FpocketFindPockets
-from .protocol_mdpocket_findPockets import MDpocketAnalyze
-from .protocol_mdpocket_characterizePockets import MDpocketCharacterize
+from fpocket.protocols.protocol_fpocket import FpocketFindPockets
+from fpocket.protocols.protocol_mdpocket_findPockets import MDpocketAnalyze
+from fpocket.protocols.protocol_mdpocket_characterizePockets import MDpocketCharacterize
 
