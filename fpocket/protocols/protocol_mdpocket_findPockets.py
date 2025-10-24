@@ -41,9 +41,11 @@ from pwem.protocols import EMProtocol
 #from pwem.protocols import protocol_define_manual_pockets
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
+from gromacs.objects import GromacsSystem
 from pwchem.utils import *
 from fpocket import Plugin
 from fpocket.constants import *
+from pwem.convert.atom_struct import cifToPdb
 
 class MDpocketAnalyze(EMProtocol):
     """
@@ -57,14 +59,18 @@ class MDpocketAnalyze(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputSystem', params.PointerParam,
                        pointerClass='GromacsSystem', allowsNull=False,
-                       label="Input atomic system: ",
-                       help='Select the atom structure to search for pockets')
+                       label="Input gromacs system: ",
+                       help='Select the MD system to search for pockets')
+        form.addParam('refPDB', params.PointerParam,
+                      pointerClass='AtomStruct', allowsNull=False,
+                      label='Reference PDB: ',
+                      help='Select the PDB file use din the system.')
 
         group = form.addGroup('Search parameters')
-        form.addParam('transDruggable', params.BooleanParam,
+        form.addParam('transDruggable', params.BooleanParam, deafult=False,
                       label='Search transient druggable binding pockets: ',
                       help='Assess at what point the identified pocket is likely to bind drug like molecules.')
-        form.addParam('choosePocket', params.BooleanParam,
+        form.addParam('choosePocket', params.BooleanParam, default=False,
                       label='Choose pocket type for advanced search: ',
                       help='Select type of pocket.')
 
@@ -82,18 +88,41 @@ class MDpocketAnalyze(EMProtocol):
                    )
 
     def _getMDpocketArgs(self):
-        trajFile = os.path.abspath(self.inputSystem.get().getTrajectoryFile())
-        args = ['--trajectory_file', trajFile]
+        trajFile = self.inputSystem.get().getTrajectoryFile()
+        trajBasename = os.path.abspath(os.path.basename(trajFile))
+        args = ['--trajectory_file', trajBasename]
 
         trajExt = os.path.splitext(trajFile)[1][1:]
-        args += ['--trajectory_format', trajExt]
+        args.append('--trajectory_format')
+        args.append(trajExt)
 
-        pdbFile = os.path.abspath(self.inputSystem.get().getSystemFile())
-        args += ['-f', pdbFile]
+        #todo how tf do i get the reference PDB
+        #pdbFile = os.path.abspath(self.inputSystem.get().getSystemFile())
+        atomStructFile = (self.refPDB.get().getFileName())
+        print(atomStructFile)
+        parentID = self.inputSystem.get().getObjParentId()
+        print(parentID)
+        basename = os.path.splitext(os.path.basename(atomStructFile))[0]
 
-        #todo change this logic to follow new input params
+
+        if atomStructFile.endswith('.cif'):
+            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            cifToPdb(atomStructFile, inpPDBFile)
+        elif atomStructFile.endswith('.pdbqt'):
+            args2 = ""
+            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            args2 = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(atomStructFile), inpPDBFile)
+            runOpenBabel(protocol=self, args=args2, cwd=self._getTmpPath())
+
+        else:
+            inpPDBFile = atomStructFile
+
+        print(inpPDBFile)
+        args.append('-f')
+        args.append(inpPDBFile)
+
         if (self.transDruggable.get()): #use default pockets by force
-            args += ['-S']
+            args.append('-S')
 
         if (self.choosePocket.get()):
             selPock = self.getEnumText('pockType')
@@ -102,13 +131,13 @@ class MDpocketAnalyze(EMProtocol):
                 pass
 
             if selPock == 'Channels and small cavities':
-                args += [' -m 2.8 -M 5.5 -i 3']
+                args.append(' -m 2.8 -M 5.5 -i 3')
 
             elif selPock == 'Water binding sites':
-                args += ['-m 3.5 -M 5.5 -i 3']
+                args.append('-m 3.5 -M 5.5 -i 3')
 
             elif selPock == 'Big external pockets':
-                args += ['-m 3.5 -M 10.0 -i 3']
+                args.append('-m 3.5 -M 10.0 -i 3')
 
         args +=['-C']
 

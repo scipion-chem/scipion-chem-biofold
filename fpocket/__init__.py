@@ -63,5 +63,25 @@ class Plugin(pwchemPlugin):
         """ Run Fpocket command from a given protocol. """
         protocol.runJob(join(cls.getVar(FPOCKET_DIC['home']), 'bin/{}'.format(program)), args, cwd=cwd)
 
+    @classmethod
+    def runMDpocket(cls, protocol, program, args, cwd=None):
+        """ Run MDpocket command from a given protocol. """
+        protocol.runJob(join(cls.getVar(FPOCKET_DIC['home']), 'bin/{}'.format(program)), args, cwd=cwd)
+
+    @classmethod
+    def runSelIsovalue(cls, protocol, program, args, cwd=None):
+        cmd = 'python {}/{}'.format(join(cls.getVar(FPOCKET_DIC['home']), 'scripts'), program)
+        protocol.runJob(cmd, args, cwd=cwd)
+
+    @classmethod
+    def runMDpocket_2(cls, protocol, program, args, cwd=None):
+        protocol.runJob(program, args, cwd=cwd)
+
+    @classmethod  # Test that
+    def getEnviron(cls):
+        pass
+
+    # ---------------------------------- Utils functions  -----------------------
+
     # ---------------------------------- Utils functions  -----------------------
 
