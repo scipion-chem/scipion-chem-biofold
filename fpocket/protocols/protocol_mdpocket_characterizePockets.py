@@ -50,7 +50,7 @@ class MDpocketCharacterize(EMProtocol):
     """
     Executes the mdpocket software to look for protein pockets.
     """
-    _label = 'Characterization of pockets'
+    _label = 'Pocket characterization'
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):

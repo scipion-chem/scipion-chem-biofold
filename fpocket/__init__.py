@@ -54,9 +54,22 @@ class Plugin(pwchemPlugin):
                                   packageVersion=FPOCKET_DIC['version'])
 
         fpocketPath = join(pwem.Config.EM_ROOT, cls.getEnvName(FPOCKET_DIC))
-        installer.addCommand(f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
-                             f'{FPOCKET_DIC["name"]}_installed').\
-            addPackage(env, dependencies=['conda'], default=default)
+        installer.addCommand(
+            f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
+            f'{FPOCKET_DIC["name"]}_installed'
+        )
+
+        scriptsDir = join(fpocketPath, "scripts")
+        installer.addCommand(f'mkdir -p "{scriptsDir}"', 'create_scripts_dir')
+
+        githubBase = "https://raw.githubusercontent.com/Discngine/fpocket/master/scripts"
+        script = "extractISOPdb.py"
+        installer.addCommand(
+            f'curl -L {githubBase}/{script} -o "{scriptsDir}/{script}"',
+            f'download_{script}'
+        )
+
+        installer.addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
     def runFpocket(cls, protocol, program, args, cwd=None):
@@ -64,24 +77,27 @@ class Plugin(pwchemPlugin):
         protocol.runJob(join(cls.getVar(FPOCKET_DIC['home']), 'bin/{}'.format(program)), args, cwd=cwd)
 
     @classmethod
-    def runMDpocket(cls, protocol, program, args, cwd=None):
+    def runMDpocket(cls, protocol, program, args, cwd):
         """ Run MDpocket command from a given protocol. """
-        protocol.runJob(join(cls.getVar(FPOCKET_DIC['home']), 'bin/{}'.format(program)), args, cwd=cwd)
+        protocol.runJob(f'./{program}', arguments=args, cwd=cwd)
 
     @classmethod
     def runSelIsovalue(cls, protocol, program, args, cwd=None):
-        cmd = 'python {}/{}'.format(join(cls.getVar(FPOCKET_DIC['home']), 'scripts'), program)
+        cmd = 'python {}/{}'.format(join(cls.getVar(FPOCKET_DIC['home']), '/scripts'), program)
         protocol.runJob(cmd, args, cwd=cwd)
 
     @classmethod
     def runMDpocket_2(cls, protocol, program, args, cwd=None):
         protocol.runJob(program, args, cwd=cwd)
 
+    @classmethod
+    def runGmx(cls, protocol, program, args, cwd=None):
+        """ Run gmx command from a given protocol. """
+        protocol.runJob(join(cls.getVar(gromacs.Plugin._homeVar), 'bin/{}'.format(program)), args, cwd=cwd)
+
     @classmethod  # Test that
     def getEnviron(cls):
         pass
-
-    # ---------------------------------- Utils functions  -----------------------
 
     # ---------------------------------- Utils functions  -----------------------
 
