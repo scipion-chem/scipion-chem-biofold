@@ -192,7 +192,6 @@ class MDpocketAnalyze(EMProtocol):
             if os.path.exists(src):
                 shutil.move(src, os.path.join(pdbDir, f))
 
-
         pdbFile = os.path.basename(self.inputSystem.get().getAttributeValue('pdbFile'))
         trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
 
@@ -200,8 +199,6 @@ class MDpocketAnalyze(EMProtocol):
             path = os.path.join(mdpocketDir, f)
             if os.path.exists(path):
                 os.remove(path)
-
-
 
     def selIsovalue(self):
         if (self.densIsoValue.get() != 8.0):
@@ -217,12 +214,12 @@ class MDpocketAnalyze(EMProtocol):
         outPockets = SetOfStructROIs(filename=self._getExtraPath('pockets.sqlite'))
         for pFile in pocketFiles:
             if '.pdb' in pFile:
-                #todo find nPoints, contactResidues, contactAtoms
+                #todo see if its being scored ok
                 roi = StructROI(filename=os.path.join(pocketsDir, pFile), pClass='MDpocket')
-
+                outPockets.append(roi)
 
         outPockets.buildPDBhetatmFile()
-        self._defineOutputs()
+        self._defineOutputs(outPockets)
 
 
 
