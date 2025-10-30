@@ -68,6 +68,7 @@ class Plugin(pwchemPlugin):
             f'curl -L {githubBase}/{script} -o "{scriptsDir}/{script}"',
             f'download_{script}'
         )
+        installer.addCommand(f'chmod +x {script}')
 
         installer.addPackage(env, dependencies=['conda'], default=default)
 
@@ -82,22 +83,9 @@ class Plugin(pwchemPlugin):
         protocol.runJob(f'./{program}', arguments=args, cwd=cwd)
 
     @classmethod
-    def runSelIsovalue(cls, protocol, program, args, cwd=None):
-        cmd = 'python {}/{}'.format(join(cls.getVar(FPOCKET_DIC['home']), '/scripts'), program)
-        protocol.runJob(cmd, args, cwd=cwd)
+    def runScript(cls, protocol, program, args, cwd):
+        cmd = 'python {}/{}'.format(join(cls.getVar(FPOCKET_DIC['home']), './scripts'), program)
+        protocol.runJob(f'python {program}', arguments=args, cwd=cwd)
 
-    @classmethod
-    def runMDpocket_2(cls, protocol, program, args, cwd=None):
-        protocol.runJob(program, args, cwd=cwd)
 
-    @classmethod
-    def runGmx(cls, protocol, program, args, cwd=None):
-        """ Run gmx command from a given protocol. """
-        protocol.runJob(join(cls.getVar(gromacs.Plugin._homeVar), 'bin/{}'.format(program)), args, cwd=cwd)
-
-    @classmethod  # Test that
-    def getEnviron(cls):
-        pass
-
-    # ---------------------------------- Utils functions  -----------------------
 
