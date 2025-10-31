@@ -139,7 +139,6 @@ class MDpocketAnalyze(EMProtocol):
         return args
 
     def _getMDpocketPDBsArgs(self):
-        #todo no funciona
         routes = []
         for pocket in self.inputPDBs.get():
             if pocket.getClass() == 'FPocket':
@@ -154,19 +153,17 @@ class MDpocketAnalyze(EMProtocol):
 
 
         movedFile = self.moveFilePDB()
-        #pluginArgs = ["--pdb_list", movedFile]
         pluginArgs = ["-L", movedFile]
 
         if (self.characterize.get()):
-            args.append('--selected_pocket')
-            args.append(self.pocket.get().getFileName())
+            pluginArgs.append('--selected_pocket')
+            pluginArgs.append(self.pocket.get().getFileName())
 
         return pluginArgs
 
 
     def _getselIsovalueDensArgs(self):
-    # python extractISOPdb.py path/my_dx_file.dx outputname.pdb isovalue
-
+        # python extractISOPdb.py path/my_dx_file.dx outputname.pdb isovalue
         volFile = os.path.abspath(self._getPath("mdpout_dens_grid.dx")) #To get the extra path between home path and protocol
         args = [volFile]
 
@@ -178,8 +175,7 @@ class MDpocketAnalyze(EMProtocol):
         return args
 
     def _getselIsovalueFreqArgs(self):
-    # python extractISOPdb.py path/my_dx_file.dx outputname.pdb isovalue
-
+        # python extractISOPdb.py path/my_dx_file.dx outputname.pdb isovalue
         volFile = os.path.abspath(self._getPath("mdpout_freq_grid.dx")) #To get the extra path between home path and protocol
         args = [volFile]
 
@@ -200,7 +196,6 @@ class MDpocketAnalyze(EMProtocol):
 
     def mdPocketStep(self):
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
-
         if self.useSystem.get():
             #use system
             Plugin.runMDpocket(
@@ -209,31 +204,14 @@ class MDpocketAnalyze(EMProtocol):
                 args=self._getMDpocketSystemArgs(),
                 cwd=mdpocketDir
             )
-            #move resulting files to specific paths
-            outDir = self._getPath()
-            for f in ["mdpout_dens_grid.dx",
-                      "mdpout_freq_grid.dx",
-                      "time.txt"]:
-                src = os.path.join(mdpocketDir, f)
-                if os.path.exists(src):
-                    shutil.move(src, os.path.join(outDir, f))
-            pdbDir = self._getExtraPath()
-            for f in ["mdpout_all_atom_pdensities.pdb",
-                      "mdpout_dens_iso_8.pdb",
-                      "mdpout_freq_iso_0_5.pdb"]:
-                src = os.path.join(mdpocketDir, f)
-                if os.path.exists(src):
-                    shutil.move(src, os.path.join(pdbDir, f))
-
             pdbFile = os.path.basename(self.inputSystem.get().getAttributeValue('pdbFile'))
             trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
-
             for f in [pdbFile, trajFile]:
                 path = os.path.join(mdpocketDir, f)
                 if os.path.exists(path):
                     os.remove(path)
         else:
-            # use system
+            #use pdb files
             Plugin.runMDpocket(
                 self,
                 './mdpocket',
@@ -245,6 +223,7 @@ class MDpocketAnalyze(EMProtocol):
             if os.path.exists(path):
                 os.remove(path)
 
+        self.cleanUp(mdpocketDir)
 
     def selIsovalue(self):
         scriptDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'scripts'))
@@ -253,19 +232,21 @@ class MDpocketAnalyze(EMProtocol):
         if (self.freqIsoValue.get() != 0.5):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueFreqArgs(), cwd=scriptDir)
 
+        self.cleanUp(scriptDir)
+
     def defineOutputStep(self):
-        #todo change this, build StructROIs with pdb files and create SetOfStructROIs as output
         pocketsDir = self._getExtraPath()
         pocketFiles = os.listdir(pocketsDir)
 
         outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
+        proteinFile = self._getExtraPath("mdpout_all_atom_pdensities.pdb")
         for pFile in pocketFiles:
             if '.pdb' in pFile:
-                roi = StructROI(filename=os.path.join(pocketsDir, pFile), pClass='MDpocket')
+                roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
                 outPockets.append(roi)
 
+        outPockets.buildPDBhetatmFile()
         self._defineOutputs(outputSet=outPockets)
-
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -281,7 +262,6 @@ class MDpocketAnalyze(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-
     def getCoords(self):
         pdbFile = os.path.abspath(self._getExtraPath('mdpoutput-{}.pdb'.format(str(self.isoValue.get()))))
         coords = []
@@ -318,4 +298,21 @@ class MDpocketAnalyze(EMProtocol):
         shutil.copy(str(file),  os.path.join(mdpocketDir, os.path.basename(file)))
 
         return os.path.basename(file)
+
+    def cleanUp(self, mdpocketDir):
+        outDir = self._getPath()
+        pdbDir = self._getExtraPath()
+
+        os.makedirs(outDir, exist_ok=True)
+        os.makedirs(pdbDir, exist_ok=True)
+
+        for f in os.listdir(mdpocketDir):
+            src = os.path.join(mdpocketDir, f)
+            if not os.path.isfile(src):
+                continue
+
+            if f.endswith((".dx", ".txt")):
+                shutil.move(src, os.path.join(outDir, f))
+            elif f.endswith(".pdb"):
+                shutil.move(src, os.path.join(pdbDir, f))
 
