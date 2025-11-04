@@ -51,7 +51,7 @@ class MDpocketAnalyze(EMProtocol):
     """
     Executes the mdpocket software to look for protein pockets.
     """
-    _label = 'Pocket detection'
+    _label = 'MDPocket pocket detection'
     _pocketTypes = ['Small molecule binding sites', 'Putative channels and small cavities', 'Water binding sites', 'Big external pockets']
     stepsExecutionMode = params.STEPS_PARALLEL
 

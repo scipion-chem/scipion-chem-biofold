@@ -180,6 +180,8 @@ class TestMDPocketAdvanced(BaseTest):
             inputSystem=self.protSim.outputSystem,
             characterize=False,
             transDruggable=False,
+            choosePocket=True,
+            pockType=1,
             densIsoValue=7.0,
             freqIsoValue=0.4
         )
