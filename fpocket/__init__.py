@@ -84,7 +84,6 @@ class Plugin(pwchemPlugin):
 
     @classmethod
     def runScript(cls, protocol, program, args, cwd):
-        cmd = 'python {}/{}'.format(join(cls.getVar(FPOCKET_DIC['home']), './scripts'), program)
         protocol.runJob(f'python {program}', arguments=args, cwd=cwd)
 
 

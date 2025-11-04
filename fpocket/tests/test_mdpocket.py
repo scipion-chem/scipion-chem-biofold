@@ -47,7 +47,6 @@ class TestMDPocket(BaseTest):
 
         setupTestProject(cls)
         cls._runImportPDB()
-        #cls._runPrepareReceptorADT()
         cls._runPrepareSystem()
         cls._runSimulation()
 
@@ -111,68 +110,6 @@ class TestMDPocket(BaseTest):
         pdbOut = getattr(protMDPocket, 'outputSet', None)
         self.assertIsNotNone(pdbOut)
 
-    def testFpocket(self):
-        self._runMDPocketFind()
-
-
-class TestMDPocketAdvanced(BaseTest):
-    @classmethod
-    def setUpClass(cls):
-        cls.ds = DataSet.getDataSet('model_building_tutorial')
-
-        setupTestProject(cls)
-        cls._runImportPDB()
-        #cls._runPrepareReceptorADT()
-        cls._runPrepareSystem()
-        cls._runSimulation()
-
-    @classmethod
-    def _runImportPDB(cls):
-        protImportPDB = cls.newProtocol(
-            ProtImportPdb,
-            inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/1ake_mut1.pdb'))
-        cls.proj.launchProtocol(protImportPDB, wait=True)
-        cls.protImportPDB = protImportPDB
-
-    @classmethod
-    def _runPrepareSystem(cls):
-        protPrepare = cls.newProtocol(
-            GromacsSystemPrep,
-            inputStructure=cls.protImportPDB.outputPdb,
-            boxType=1, sizeType=1, padDist=2.0,
-            mainForceField=0, waterForceField=2,
-            placeIons=1, cationType=7, anionType=1)
-
-        cls.launchProtocol(protPrepare)
-        cls.protPrepare = protPrepare
-
-    @classmethod
-    def _runPrepareReceptorADT(cls):
-        cls.protPrepareReceptor = cls.newProtocol(
-            ProtChemADTPrepareReceptor,
-            inputAtomStruct=cls.protImportPDB.outputPdb,
-            prepProg=1, nphs=False,
-            HETATM=True, rchains=False)
-
-        cls.protPrepareReceptor = cls.launchProtocol(cls.protPrepareReceptor)
-
-    @classmethod
-    def _runSimulation(self):
-        protSim = self.newProtocol(
-            GromacsMDSimulation,
-            gromacsSystem=self.protPrepare.outputSystem, workFlowSteps=workflow, summarySteps=summary)
-        protSim.setObjLabel('gromacs - gmx MD sim')
-
-        outIndex = protSim.getCustomIndexFile()
-        if os.path.exists(outIndex):
-            protSim.parseIndexFile(outIndex)
-        else:
-            protSim.createIndexFile(self.protPrepare.outputSystem, inIndex=None, outIndex=protSim.getCustomIndexFile())
-
-        self.launchProtocol(protSim)
-        self.protSim = protSim
-
     def _runMDPocketFindAdvanced(self):
         protMDPocketAdv = self.newProtocol(
             MDpocketAnalyze,
@@ -190,8 +127,8 @@ class TestMDPocketAdvanced(BaseTest):
         pdbOut = getattr(protMDPocketAdv, 'outputSet', None)
         self.assertIsNotNone(pdbOut)
 
-
     def testFpocket(self):
+        self._runMDPocketFind()
         self._runMDPocketFindAdvanced()
 
 
