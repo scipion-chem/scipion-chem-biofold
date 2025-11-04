@@ -6,5 +6,4 @@
 
 from fpocket.protocols.protocol_fpocket import FpocketFindPockets
 from fpocket.protocols.protocol_mdpocket_findPockets import MDpocketAnalyze
-from fpocket.protocols.protocol_mdpocket_characterizePockets import MDpocketCharacterize
 
