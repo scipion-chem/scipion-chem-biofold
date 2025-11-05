@@ -63,7 +63,7 @@ class viewerFPocket(ViewerGeneralStructROIs):
     outFile = oPockets.getProteinFile().split('/')[-1]
     pdbName, _ = os.path.splitext(outFile)
     outDir = os.path.abspath(self.protocol._getExtraPath(pdbName + '_out'))
-    cmd = '{} -e {}'.format(outFile, tclFile)
+    cmd = '../{} -e {}'.format(outFile, tclFile)
 
     return [VmdViewPopen(cmd, cwd=outDir)]
 

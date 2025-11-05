@@ -31,16 +31,15 @@ This protocol is used to perform a pocket search on a protein structure using th
 
 """
 
-import os, shutil
+import os
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pyworkflow.object import String
 from pwem.protocols import EMProtocol
-from pwem.convert import cifToPdb
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import runOpenBabel
+from pwchem.utils import runOpenBabel, cifFromASFile, getBaseName
 
 from fpocket import Plugin
 from fpocket.constants import *
@@ -93,7 +92,7 @@ class FpocketFindPockets(EMProtocol):
 
 
     def _getFpocketArgs(self):
-        args = ['-f', os.path.abspath(self.getLocalFileName())]
+        args = ['-f', os.path.abspath(self._getCifFile())]
 
         #Alpha spheres
         args += ['-m', self.minAlpha.get(), '-M', self.maxAlpha.get(), '-i', self.minNSpheres.get(),
@@ -110,30 +109,13 @@ class FpocketFindPockets(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('fPocketStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.fPocketStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def convertInputStep(self):
-        #Simply copying the input struct file into current extra file (fpocket will create output there automatically)
-        inpStruct = self.inputAtomStruct.get()
-        inpFile = self.getInputPath()
-        inpName = self.getInputFileName()
-        _, ext = os.path.splitext(inpName)
-
-        localFile = self.getLocalFileName()
-        if ext == '.ent':
-            shutil.copy(inpFile, localFile)
-        elif ext == '.cif':
-            cifToPdb(inpFile, localFile)
-        elif ext == '.pdbqt':
-            args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpFile), os.path.abspath(localFile))
-            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
-
-        elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            inpStruct.convert2PDB(outPDB=localFile)
-        else:
-            shutil.copy(inpFile, localFile)
+      inpFile = self.inputAtomStruct.get().getFileName()
+      cifFromASFile(inpFile, self._getCifFile())
 
     def fPocketStep(self):
         Plugin.runFpocket(self, 'fpocket', args=self._getFpocketArgs(), cwd=self._getExtraPath())
@@ -142,21 +124,24 @@ class FpocketFindPockets(EMProtocol):
         inpName = self.getInputFileName()
         _, ext = os.path.splitext(inpName)
 
-        pocketsDir = self._getExtraPath('{}/pockets'.format(self.getInputBaseName() + '_out'))
+        oDir = self._getExtraPath(f'{self._getInputName()}_out')
+        pocketsDir = os.path.join(oDir, 'pockets')
         pocketFiles = os.listdir(pocketsDir)
 
         inpStruct = self.inputAtomStruct.get()
         outPockets = SetOfStructROIs(filename=self._getExtraPath('pockets.sqlite'))
         for pFile in pocketFiles:
-            if '.pdb' in pFile:
+            if '.cif' in pFile:
                 pFileName = os.path.join(pocketsDir, pFile)
-                pqrFile = pFileName.replace('atm.pdb', 'vert.pqr')
-                pock = StructROI(pqrFile, self.getLocalFileName(), pFileName, pClass='FPocket')
+                self.cleanMalformedCif(pFileName)
+                pqrFile = pFileName.replace('atm.cif', 'vert.pqr')
+                pock = StructROI(pqrFile, self._getCifFile(), pFileName, pClass='FPocket')
                 if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                   pock._maeFile = String(os.path.abspath(inpStruct.getFileName()))
                 outPockets.append(pock)
 
-        outPockets.buildPDBhetatmFile()
+        outHetAtmFile = os.path.join(oDir, f'{self._getInputName()}_out.cif')
+        outPockets.setProteinHetatmFile(outHetAtmFile)
         self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
 
 
@@ -176,7 +161,7 @@ class FpocketFindPockets(EMProtocol):
         inpStruct = self.inputAtomStruct.get()
         inpFile = os.path.abspath(inpStruct.getFileName())
         if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-          inpFile = inpStruct.convert2PDB()
+          inpFile = inpStruct.convert2()
         with open(inpFile) as f:
           fileStr = f.read()
         if re.search('\nHETATM', fileStr):
@@ -192,11 +177,19 @@ class FpocketFindPockets(EMProtocol):
     def getInputFileName(self):
         return self.getInputPath().split('/')[-1]
 
-    def getInputBaseName(self):
-        filename = self.getInputFileName()
-        inpBase, _ = os.path.splitext(filename)
-        return inpBase
+    def _getCifFile(self):
+      return os.path.abspath(self._getExtraPath(self._getInputName() + '.cif'))
 
-    def getLocalFileName(self):
-      inpBase = self.getInputBaseName()
-      return self._getExtraPath(inpBase + '.pdb')
+    def _getInputName(self):
+        return getBaseName(self.getInputPath())
+
+    def cleanMalformedCif(self, cifFile):
+        oStr = ''
+        with open(cifFile) as f:
+          for line in f:
+            if not line.startswith('  '):
+              oStr += line
+
+        with open(cifFile, 'w') as f:
+          f.write(oStr)
+
