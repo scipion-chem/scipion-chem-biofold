@@ -31,7 +31,8 @@ This protocol is used to perform a pocket search on a protein structure using th
 
 """
 
-import os
+import os, sys
+import subprocess as sp
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -39,10 +40,13 @@ from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import runOpenBabel, cifFromASFile, getBaseName
+from pwchem.utils import runOpenBabel, cifFromASFile, getBaseName, runInParallel, performBatchThreading
 
 from fpocket import Plugin
 from fpocket.constants import *
+
+def cleanMalformedCif(f):
+  sp.check_call(f"grep -v '^[[:space:]]' '{f}' > '{f}.tmp' && mv '{f}.tmp' '{f}'", shell=True)
 
 class FpocketFindPockets(EMProtocol):
     """
@@ -90,6 +94,8 @@ class FpocketFindPockets(EMProtocol):
                        label='Monte-Carlo iterations for volume',
                        help='Number of Monte-Carlo iteration for the calculation of each pocket volume.')
 
+        form.addParallelSection(threads=4, mpi=1)
+
 
     def _getFpocketArgs(self):
         args = ['-f', os.path.abspath(self._getCifFile())]
@@ -123,26 +129,38 @@ class FpocketFindPockets(EMProtocol):
     def createOutputStep(self):
         inpName = self.getInputFileName()
         _, ext = os.path.splitext(inpName)
+        nt = self.numberOfThreads.get()
 
         oDir = self._getExtraPath(f'{self._getInputName()}_out')
         pocketsDir = os.path.join(oDir, 'pockets')
-        pocketFiles = os.listdir(pocketsDir)
+        pocketFiles = [os.path.join(pocketsDir, f) for f in os.listdir(pocketsDir) if f.endswith('.cif')]
+        runInParallel(cleanMalformedCif, paramList=[f for f in pocketFiles], jobs=nt)
 
         inpStruct = self.inputAtomStruct.get()
-        outPockets = SetOfStructROIs(filename=self._getExtraPath('pockets.sqlite'))
-        for pFile in pocketFiles:
-            if '.cif' in pFile:
-                pFileName = os.path.join(pocketsDir, pFile)
-                self.cleanMalformedCif(pFileName)
-                pqrFile = pFileName.replace('atm.cif', 'vert.pqr')
-                pock = StructROI(pqrFile, self._getCifFile(), pFileName, pClass='FPocket')
-                if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                  pock._maeFile = String(os.path.abspath(inpStruct.getFileName()))
-                outPockets.append(pock)
+        setFile = self._getExtraPath('pockets.sqlite')
+        if os.path.exists(setFile):
+          os.remove(setFile)
+        outSet = SetOfStructROIs(filename=setFile)
+
+        outputPocks = performBatchThreading(self.performOutputCreation, pocketFiles, nt,
+                                            inpStruct=inpStruct, cloneItem=False)
+        for i, pock in enumerate(outputPocks):
+            outSet.append(pock)
 
         outHetAtmFile = os.path.join(oDir, f'{self._getInputName()}_out.cif')
-        outPockets.setProteinHetatmFile(outHetAtmFile)
-        self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
+        outSet.setProteinHetatmFile(outHetAtmFile)
+        self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outSet})
+
+    def performOutputCreation(self, pocketFiles, molLists, it, inpStruct):
+      outPocks = []
+      for pFile in pocketFiles:
+        pqrFile = pFile.replace('atm.cif', 'vert.pqr')
+        pock = StructROI(pqrFile, self._getCifFile(), pFile, pClass='FPocket')
+        if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+          pock._maeFile = String(os.path.abspath(inpStruct.getFileName()))
+        outPocks.append(pock)
+
+      molLists[it] = outPocks
 
 
     # --------------------------- INFO functions -----------------------------------
@@ -182,14 +200,4 @@ class FpocketFindPockets(EMProtocol):
 
     def _getInputName(self):
         return getBaseName(self.getInputPath())
-
-    def cleanMalformedCif(self, cifFile):
-        oStr = ''
-        with open(cifFile) as f:
-          for line in f:
-            if not line.startswith('  '):
-              oStr += line
-
-        with open(cifFile, 'w') as f:
-          f.write(oStr)
 
