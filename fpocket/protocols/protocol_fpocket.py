@@ -40,13 +40,36 @@ from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import runOpenBabel, cifFromASFile, getBaseName, runInParallel, performBatchThreading
+from pwchem.utils import runOpenBabel, cifFromASFile, getBaseName, runInParallel, performBatchThreading, writeCIFLine
+from pwchem.constants import CIF_DEF_COLS, CIF_DEF_HEADER
 
 from fpocket import Plugin
 from fpocket.constants import *
 
 def cleanMalformedCif(f):
   sp.check_call(f"grep -v '^[[:space:]]' '{f}' > '{f}.tmp' && mv '{f}.tmp' '{f}'", shell=True)
+
+def pqrToCif(pqrFile):
+    cifCols = '\n'.join(CIF_DEF_COLS)
+    outStr = CIF_DEF_HEADER.format(cifCols)
+
+    pocketK = pqrFile.split('pocket')[-1].split('_vert')[0]
+    with open(pqrFile) as f:
+      i = 0
+      for line in f:
+        if line.startswith('ATOM'):
+          pLine = line.split()
+          coords = [float(c) for c in pLine[5:8]]
+          replacements = [str(i + 1), f'C{i + 1}', 'STP', 'C', 1, pocketK, *coords]
+          cifLine = writeCIFLine(*replacements)
+          outStr += cifLine
+          i += 1
+
+    cifFile = pqrFile.replace('.pqr', '.cif')
+    with open(cifFile, 'w') as f:
+      f.write(outStr)
+
+    return cifFile
 
 class FpocketFindPockets(EMProtocol):
     """
@@ -133,8 +156,8 @@ class FpocketFindPockets(EMProtocol):
 
         oDir = self._getExtraPath(f'{self._getInputName()}_out')
         pocketsDir = os.path.join(oDir, 'pockets')
-        pocketFiles = [os.path.join(pocketsDir, f) for f in os.listdir(pocketsDir) if f.endswith('.cif')]
-        runInParallel(cleanMalformedCif, paramList=[f for f in pocketFiles], jobs=nt)
+        pqrFiles = [os.path.join(pocketsDir, f) for f in os.listdir(pocketsDir) if f.endswith('.pqr')]
+        pocketFiles = runInParallel(pqrToCif, paramList=[f for f in pqrFiles], jobs=nt)
 
         inpStruct = self.inputAtomStruct.get()
         setFile = self._getExtraPath('pockets.sqlite')
@@ -154,8 +177,8 @@ class FpocketFindPockets(EMProtocol):
     def performOutputCreation(self, pocketFiles, molLists, it, inpStruct):
       outPocks = []
       for pFile in pocketFiles:
-        pqrFile = pFile.replace('atm.cif', 'vert.pqr')
-        pock = StructROI(pqrFile, self._getCifFile(), pFile, pClass='FPocket')
+        atmFile = pFile.replace('vert.cif', 'atm.cif')
+        pock = StructROI(pFile, self._getCifFile(), atmFile, pClass='FPocket')
         if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
           pock._maeFile = String(os.path.abspath(inpStruct.getFileName()))
         outPocks.append(pock)
