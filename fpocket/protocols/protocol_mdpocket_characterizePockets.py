@@ -28,7 +28,7 @@
 
 
 """
-This protocol is used to perform a pocket search on a protein structure using the FPocket software
+This protocol is used to perform a pocket charcaterization on a protein structure using the FPocket software
 
 """
 
@@ -47,11 +47,11 @@ from fpocket import Plugin
 from fpocket.constants import *
 from pwem.convert.atom_struct import cifToPdb
 
-class MDpocketAnalyze(EMProtocol):
+class MDpocketCharacterize(EMProtocol):
     """
-    Executes the mdpocket software to look for protein pockets.
+    Executes the mdpocket software to perform pocket characterization.
     """
-    _label = 'MDPocket pocket detection'
+    _label = 'MDPocket pocket characterization'
     _pocketTypes = ['Small molecule binding sites', 'Putative channels and small cavities', 'Water binding sites', 'Big external pockets']
     stepsExecutionMode = params.STEPS_PARALLEL
 
@@ -71,28 +71,10 @@ class MDpocketAnalyze(EMProtocol):
                       label="Input set of struct ROIs: ",
                       help='Select the structural ROIs to use as input.')
 
-        group = form.addGroup('Search parameters')
-        group.addParam('transDruggable', params.BooleanParam, deafult=False,
-                      label='Search transient druggable binding pockets: ',
-                      help='Assess at what point the identified pocket is likely to bind drug like molecules.')
-        group.addParam('choosePocket', params.BooleanParam, default=False,
-                      label='Choose pocket type for advanced search: ',
-                      help='Select type of pocket.')
-
-        group.addParam('densIsoValue', params.FloatParam, default=8.0, expertLevel=params.LEVEL_ADVANCED,
-                       label='Selected density isovalue: ',
-                       help='Creates a pdb file of all grid point positions corresponding to grid points having (isovalue) or more Voronoi vertices nearby per snapshot. A default file will also be created with default isoValue 8.')
-        group.addParam('freqIsoValue', params.FloatParam, default=0.5, expertLevel=params.LEVEL_ADVANCED,
-                       label='Selected frequency isovalue: ',
-                       help='Creates a pdb file of all grid point positions corresponding to grid points that are above selected fraction of the trajectory overlapping with a pocket. A default file will also be created with default isoValue 0.5 (50%).')
-        group.addParam('keepDefaultFiles', params.BooleanParam, default=True,
-                       label='Keep result files with default parameters: ',
-                       help='The default files are created always, choose whether to keep them or not.')
-        group.addParam('pockType', params.EnumParam,
-                   choices=self._pocketTypes, default=0,  condition='choosePocket',
-                   label='Pocket type:',
-                   help='Detect different type of pockets with a set of specific inner parameters.'
-                   )
+        form.addParam('pocket', params.PointerParam,
+                      pointerClass='StructROI', allowsNull=True,
+                      label="Input ROI: ",
+                      help='Select the ROI to use as input for characterization.')
 
         form.addParallelSection(threads=4)
 
@@ -110,20 +92,9 @@ class MDpocketAnalyze(EMProtocol):
         args.append('-f')
         args.append(pdbFile)
 
-        if (self.transDruggable.get()):
-            args.append('-S')
+        args.append('--selected_pocket')
+        args.append(self.pocket.get().getFileName())
 
-        if (self.choosePocket.get()):
-            selPock = self.getEnumText('pockType')
-
-            if selPock == 'Small molecule binding sites':
-                pass
-            elif selPock == 'Putative channels and small cavities':
-                args.append(' -m 2.8 -M 5.5 -i 3')
-            elif selPock == 'Water binding sites':
-                args.append('-m 3.5 -M 5.5 -i 3')
-            elif selPock == 'Big external pockets':
-                args.append('-m 3.5 -M 10.0 -i 3')
         return args
 
     def _getMDpocketPDBsArgs(self):
@@ -143,37 +114,10 @@ class MDpocketAnalyze(EMProtocol):
         movedFile = self.moveFilePDB()
         pluginArgs = ["-L", movedFile]
 
-        if (self.characterize.get()):
-            pluginArgs.append('--selected_pocket')
-            pluginArgs.append(self.pocket.get().getFileName())
+        pluginArgs.append('--selected_pocket')
+        pluginArgs.append(self.pocket.get().getFileName())
 
         return pluginArgs
-
-
-    def _getselIsovalueDensArgs(self):
-        # python extractISOPdb.py path/my_dx_file.dx outputname.pdb isovalue
-        volFile = os.path.abspath(self._getPath("mdpout_dens_grid.dx")) #To get the extra path between home path and protocol
-        args = [volFile]
-
-        outputName = 'mdpoutput_dens_iso_{}.pdb'.format(str(self.densIsoValue.get()))
-        args += [outputName]
-
-        isoValue = self.densIsoValue.get()
-        args += [isoValue]
-        return args
-
-    def _getselIsovalueFreqArgs(self):
-        # python extractISOPdb.py path/my_dx_file.dx outputname.pdb isovalue
-        volFile = os.path.abspath(self._getPath("mdpout_freq_grid.dx")) #To get the extra path between home path and protocol
-        args = [volFile]
-
-        outputName = 'mdpoutput_freq_iso_{}.pdb'.format(str(self.freqIsoValue.get()).replace('.', '_'))
-        args += [outputName]
-
-        isoValue = self.freqIsoValue.get()
-        args += [isoValue]
-        return args
-
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -213,23 +157,9 @@ class MDpocketAnalyze(EMProtocol):
 
         self.cleanUp(mdpocketDir)
 
-    def selIsovalue(self):
-        scriptDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'scripts'))
-        if (self.densIsoValue.get() != 8.0):
-            Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueDensArgs(), cwd=scriptDir)
-        if (self.freqIsoValue.get() != 0.5):
-            Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueFreqArgs(), cwd=scriptDir)
-
-        self.cleanUp(scriptDir)
 
     def defineOutputStep(self):
         pocketsDir = self._getExtraPath()
-        if not self.keepDefaultFiles.get():
-            defaultFiles = [f'{pocketsDir}/mdpout_dens_iso_8.pdb', f'{pocketsDir}/mdpout_freq_iso_0_5.pdb']
-            for f in defaultFiles:
-                if os.path.exists(f):
-                    os.remove(f)
-
         pocketFiles = os.listdir(pocketsDir)
 
         outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
@@ -305,8 +235,7 @@ class MDpocketAnalyze(EMProtocol):
             if not os.path.isfile(src):
                 continue
 
-            if f.endswith((".dx", ".txt")):
+            if f.endswith((".txt")):
                 shutil.move(src, os.path.join(outDir, f))
             elif f.endswith(".pdb"):
                 shutil.move(src, os.path.join(pdbDir, f))
-

@@ -68,7 +68,7 @@ class Plugin(pwchemPlugin):
             f'curl -L {githubBase}/{script} -o "{scriptsDir}/{script}"',
             f'download_{script}'
         )
-        installer.addCommand(f'chmod +x {script}')
+        installer.addCommand(f'chmod +x "{scriptsDir}/{script}"')
 
         installer.addPackage(env, dependencies=['conda'], default=default)
 
