@@ -71,14 +71,15 @@ class MDpocketCharacterize(EMProtocol):
                       label="Input set of struct ROIs: ",
                       help='Select the structural ROIs to use as input.')
 
-        form.addParam('pocket', params.PointerParam,
-                      pointerClass='StructROI', allowsNull=True,
-                      label="Input ROI: ",
-                      help='Select the ROI to use as input for characterization.')
+        #todo change and use Set of pockets
+        form.addParam('pockets', params.PointerParam,
+                      pointerClass='SetOfStructROIs,StructROIs', allowsNull=True, important=True,
+                      label="Input ROIs: ",
+                      help='Select the ROI(s) to use as input for characterization.')
 
         form.addParallelSection(threads=4)
 
-    def _getMDpocketSystemArgs(self):
+    def _getMDpocketSystemArgs(self, pocket):
         pdbFile = self.moveFiles()
 
         trajFile = self.inputSystem.get().getTrajectoryFile()
@@ -93,11 +94,11 @@ class MDpocketCharacterize(EMProtocol):
         args.append(pdbFile)
 
         args.append('--selected_pocket')
-        args.append(self.pocket.get().getFileName())
+        args.append(pocket.getFileName())
 
         return args
 
-    def _getMDpocketPDBsArgs(self):
+    def _getMDpocketPDBsArgs(self, pocket2):
         routes = []
         for pocket in self.inputPDBs.get():
             if pocket.getClass() == 'FPocket':
@@ -115,7 +116,7 @@ class MDpocketCharacterize(EMProtocol):
         pluginArgs = ["-L", movedFile]
 
         pluginArgs.append('--selected_pocket')
-        pluginArgs.append(self.pocket.get().getFileName())
+        pluginArgs.append(pocket2.getFileName())
 
         return pluginArgs
 
@@ -127,34 +128,22 @@ class MDpocketCharacterize(EMProtocol):
         self._insertFunctionStep('defineOutputStep')
 
     def mdPocketStep(self):
-        mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         if self.useSystem.get():
-            #use system
-            Plugin.runMDpocket(
-                self,
-                './mdpocket',
-                args=self._getMDpocketSystemArgs(),
-                cwd=mdpocketDir
-            )
-            pdbFile = os.path.basename(self.inputSystem.get().getAttributeValue('pdbFile'))
-            trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
-            for f in [pdbFile, trajFile]:
-                path = os.path.join(mdpocketDir, f)
-                if os.path.exists(path):
-                    os.remove(path)
+            # use system
+            if isinstance(self.pockets.get(), StructROI):
+                self.runMDPocket(self.pockets.get())
+            else:
+                for pocket in self.pockets.get():
+                    self.runMDPocket(pocket)
         else:
-            #use pdb files
-            Plugin.runMDpocket(
-                self,
-                './mdpocket',
-                args=self._getMDpocketPDBsArgs(),
-                cwd=mdpocketDir
-            )
-            f = "mdpocketInputFile.txt"
-            path = os.path.join(mdpocketDir, f)
-            if os.path.exists(path):
-                os.remove(path)
+            # use pdb files
+            if isinstance(self.pockets.get(), StructROI):
+                self.runMDPocketPDB(self.pockets.get())
+            else:
+                for pocket in self.pockets.get():
+                    self.runMDPocketPDB(pocket)
 
+        mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         self.cleanUp(mdpocketDir)
 
 
@@ -239,3 +228,31 @@ class MDpocketCharacterize(EMProtocol):
                 shutil.move(src, os.path.join(outDir, f))
             elif f.endswith(".pdb"):
                 shutil.move(src, os.path.join(pdbDir, f))
+
+    def runMDPocket(self, pocket):
+        mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
+        Plugin.runMDpocket(
+            self,
+            './mdpocket',
+            args=self._getMDpocketSystemArgs(pocket),
+            cwd=mdpocketDir
+        )
+        pdbFile = os.path.basename(self.inputSystem.get().getAttributeValue('pdbFile'))
+        trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
+        for f in [pdbFile, trajFile]:
+            path = os.path.join(mdpocketDir, f)
+            if os.path.exists(path):
+                os.remove(path)
+
+    def runMDPocketPDB(self, pocket):
+        mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
+        Plugin.runMDpocket(
+            self,
+            './mdpocket',
+            args=self._getMDpocketPDBsArgs(pocket),
+            cwd=mdpocketDir
+        )
+        f = "mdpocketInputFile.txt"
+        path = os.path.join(mdpocketDir, f)
+        if os.path.exists(path):
+            os.remove(path)
