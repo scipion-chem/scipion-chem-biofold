@@ -36,16 +36,14 @@ import os, shutil
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
-from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
+from pwchem.objects import SetOfStructROIs, StructROI
 from gromacs import Plugin
-from gromacs.objects import GromacsSystem
 from pwchem.utils import *
 from fpocket import Plugin
 from fpocket.constants import *
-from pwem.convert.atom_struct import cifToPdb
+
 
 class MDpocketCharacterize(EMProtocol):
     """
@@ -71,11 +69,14 @@ class MDpocketCharacterize(EMProtocol):
                       label="Input set of struct ROIs: ",
                       help='Select the structural ROIs to use as input.')
 
-        #todo change and use Set of pockets
-        form.addParam('pockets', params.PointerParam,
-                      pointerClass='SetOfStructROIs,StructROIs', allowsNull=True, important=True,
+        #todo change and use only one ROI
+        form.addParam('inputROIs', params.PointerParam,
+                      pointerClass='SetOfStructROIs',
                       label="Input ROIs: ",
                       help='Select the ROI(s) to use as input for characterization.')
+        form.addParam('pocket', params.StringParam,
+                      label="Input specific ROI: ",
+                      help='Select the specific ROI to use as input for characterization.')
 
         form.addParallelSection(threads=4)
 
@@ -94,7 +95,8 @@ class MDpocketCharacterize(EMProtocol):
         args.append(pdbFile)
 
         args.append('--selected_pocket')
-        args.append(pocket.getFileName())
+        p = os.path.basename(pocket.getFileName())
+        args.append(p)
 
         return args
 
@@ -116,7 +118,8 @@ class MDpocketCharacterize(EMProtocol):
         pluginArgs = ["-L", movedFile]
 
         pluginArgs.append('--selected_pocket')
-        pluginArgs.append(pocket2.getFileName())
+        p = os.path.basename(pocket2.getFileName())
+        pluginArgs.append(p)
 
         return pluginArgs
 
@@ -124,24 +127,24 @@ class MDpocketCharacterize(EMProtocol):
     def _insertAllSteps(self):
         # Insert processing steps
         self._insertFunctionStep('mdPocketStep')
-        self._insertFunctionStep('selIsovalue')
         self._insertFunctionStep('defineOutputStep')
 
     def mdPocketStep(self):
+        specificPocket = self.getSpecifiedPocketFile()
         if self.useSystem.get():
             # use system
-            if isinstance(self.pockets.get(), StructROI):
-                self.runMDPocket(self.pockets.get())
-            else:
-                for pocket in self.pockets.get():
-                    self.runMDPocket(pocket)
+            #if isinstance(self.pockets.get(), StructROI):
+                self.runMDPocket(specificPocket)
+            #else:
+            #    for pocket in self.pockets.get():
+            #        self.runMDPocket(pocket)
         else:
             # use pdb files
-            if isinstance(self.pockets.get(), StructROI):
-                self.runMDPocketPDB(self.pockets.get())
-            else:
-                for pocket in self.pockets.get():
-                    self.runMDPocketPDB(pocket)
+            #if isinstance(self.pockets.get(), StructROI):
+                self.runMDPocketPDB(specificPocket)
+            #else:
+            #    for pocket in self.pockets.get():
+            #        self.runMDPocketPDB(pocket)
 
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         self.cleanUp(mdpocketDir)
@@ -195,11 +198,14 @@ class MDpocketCharacterize(EMProtocol):
         return outFile
 
     def moveFiles(self):
+        # move files to path where mdpocket is, it is picky with where it is executed and they input files routes
+        mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         trajFile = self.inputSystem.get().getTrajectoryFile()
         trajectory = os.path.abspath((trajFile))
         pdbFile = self.inputSystem.get().getAttributeValue('pdbFile')
-        # move files to path where mdpocket is, it is picky with where it is executed and they input files routes
-        mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
+        #for p in self.pockets.get():
+        specificPocket = self.getSpecifiedPocketFile()
+        shutil.copy(str(specificPocket), os.path.join(mdpocketDir, os.path.basename(specificPocket)))
         shutil.copy(str(pdbFile), os.path.join(mdpocketDir, os.path.basename(pdbFile)))
         shutil.copy(str(trajectory), os.path.join(mdpocketDir, os.path.basename(trajectory)))
 
@@ -256,3 +262,16 @@ class MDpocketCharacterize(EMProtocol):
         path = os.path.join(mdpocketDir, f)
         if os.path.exists(path):
             os.remove(path)
+
+    def getSpecifiedPocketFile(self):
+        myPocket = None
+        for pocket in self.pockets.get():
+            if pocket.__str__() == self.pocket.get():
+                myPocket = pocket.clone()
+                break
+        if myPocket == None:
+            print("Could not find the specified pocket.")
+            return None
+        else:
+            pocketFile = myPocket.getFileName()
+            return os.path.abspath(pocketFile)
