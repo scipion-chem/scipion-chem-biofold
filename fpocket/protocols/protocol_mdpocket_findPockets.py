@@ -134,10 +134,7 @@ class MDpocketAnalyze(EMProtocol):
     def _getMDpocketPDBsArgs(self):
         routes = []
         for pocket in self.inputPDBs.get():
-            if pocket.getClass() == 'FPocket':
-                routes.append(os.path.abspath(str(pocket.getFileName())))
-            else:
-                routes.append(os.path.abspath(str(pocket.getFileName())))
+            routes.append(os.path.abspath(str(pocket.getFileName())))
 
         inputFile = self._getExtraPath("mdpocketInputFile.txt")
         with open(inputFile, 'w') as f:
@@ -255,15 +252,10 @@ class MDpocketAnalyze(EMProtocol):
             outFreq.buildPDBhetatmFile()
             self._defineOutputs(outputSet=outFreq)
         elif (self.chooseOutput.get()==2):
-            for roi in outFreq:
-                roiNew = StructROI()
-                roiNew.copy(roi)
-                roiNew.cleanObjId()
-                outDens.append(roiNew)
             outDens.buildPDBhetatmFile()
-            self._defineOutputs(outputSet=outDens)
-            #outFreq.buildPDBhetatmFile()
-            #self._defineOutputs(outputSet=outFreq)
+            self._defineOutputs(outputSetDens=outDens)
+            outFreq.buildPDBhetatmFile()
+            self._defineOutputs(outputSetFreq=outFreq)
 
 
     # --------------------------- INFO functions -----------------------------------
