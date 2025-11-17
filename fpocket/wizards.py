@@ -30,7 +30,7 @@ This wizard will let the user select the specific ROI to use.
 """
 
 from pwchem.wizards import SelectElementWizard
-from protocols import MDpocketCharacterize
+from fpocket.protocols import MDpocketCharacterize
 
 
 SelectElementWizard().addTarget(protocol=MDpocketCharacterize,

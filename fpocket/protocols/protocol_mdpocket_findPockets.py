@@ -67,7 +67,7 @@ class MDpocketAnalyze(EMProtocol):
                        label="Input gromacs system: ",
                        help='Select the MD system to search for pockets.')
         form.addParam('inputPDBs', params.PointerParam, condition='not useSystem',
-                      pointerClass='SetOfStructROIs', allowsNull=True,
+                      pointerClass='SetOfStructROIs,SetOfAtomStructs', allowsNull=True,
                       label="Input set of struct ROIs: ",
                       help='Select the structural ROIs to use as input.')
 
@@ -79,10 +79,15 @@ class MDpocketAnalyze(EMProtocol):
                       label='Choose pocket type for advanced search: ',
                       help='Select type of pocket.')
 
-        group.addParam('densIsoValue', params.FloatParam, default=8.0, expertLevel=params.LEVEL_ADVANCED,
+        group = form.addGroup('Output generation')
+        group.addParam('chooseOutput', params.EnumParam, deafult=2, choices=['Frequency','Density','Both'],
+                       label='Output files: ',
+                       help='Choose what outputs to keep.')
+
+        group.addParam('densIsoValue', params.FloatParam, default=8.0, expertLevel=params.LEVEL_ADVANCED, condition='chooseOutput==1 or chooseOutput==2',
                        label='Selected density isovalue: ',
                        help='Creates a pdb file of all grid point positions corresponding to grid points having (isovalue) or more Voronoi vertices nearby per snapshot. A default file will also be created with default isoValue 8.')
-        group.addParam('freqIsoValue', params.FloatParam, default=0.5, expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('freqIsoValue', params.FloatParam, default=0.5, expertLevel=params.LEVEL_ADVANCED, condition='chooseOutput==0 or chooseOutput==2',
                        label='Selected frequency isovalue: ',
                        help='Creates a pdb file of all grid point positions corresponding to grid points that are above selected fraction of the trajectory overlapping with a pocket. A default file will also be created with default isoValue 0.5 (50%).')
         group.addParam('keepDefaultFiles', params.BooleanParam, default=True,
@@ -132,7 +137,7 @@ class MDpocketAnalyze(EMProtocol):
             if pocket.getClass() == 'FPocket':
                 routes.append(os.path.abspath(str(pocket.getFileName())))
             else:
-                routes.append(os.path.abspath(str(pocket._extraFile)))
+                routes.append(os.path.abspath(str(pocket.getFileName())))
 
         inputFile = self._getExtraPath("mdpocketInputFile.txt")
         with open(inputFile, 'w') as f:
@@ -143,9 +148,6 @@ class MDpocketAnalyze(EMProtocol):
         movedFile = self.moveFilePDB()
         pluginArgs = ["-L", movedFile]
 
-        if (self.characterize.get()):
-            pluginArgs.append('--selected_pocket')
-            pluginArgs.append(self.pocket.get().getFileName())
 
         return pluginArgs
 
@@ -215,9 +217,9 @@ class MDpocketAnalyze(EMProtocol):
 
     def selIsovalue(self):
         scriptDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'scripts'))
-        if (self.densIsoValue.get() != 8.0):
+        if ((self.chooseOutput.get() == 1 or self.chooseOutput.get()==2) and self.densIsoValue.get() != 8.0):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueDensArgs(), cwd=scriptDir)
-        if (self.freqIsoValue.get() != 0.5):
+        elif ((self.chooseOutput.get() == 0 or self.chooseOutput.get()==2) and self.freqIsoValue.get() != 0.5):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueFreqArgs(), cwd=scriptDir)
 
         self.cleanUp(scriptDir)
@@ -232,15 +234,37 @@ class MDpocketAnalyze(EMProtocol):
 
         pocketFiles = os.listdir(pocketsDir)
 
-        outPockets = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
-        proteinFile = self._getExtraPath("mdpout_all_atom_pdensities.pdb")
+        outDens = SetOfStructROIs(filename=self._getPath('pocketsDens.sqlite'))
+        outFreq = SetOfStructROIs(filename=self._getPath('pocketsFreq.sqlite'))
+        if (self.useSystem.get()):
+            proteinFile = self._getPath("outputSystem.pdb")
+        else:
+            proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
         for pFile in pocketFiles:
-            if '.pdb' in pFile:
+            if '.pdb' in pFile and 'dens_' in pFile:
                 roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
-                outPockets.append(roi)
+                outDens.append(roi)
+            if '.pdb' in pFile and 'freq' in pFile:
+                roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
+                outFreq.append(roi)
 
-        outPockets.buildPDBhetatmFile()
-        self._defineOutputs(outputSet=outPockets)
+        if (self.chooseOutput.get() == 1):
+            outDens.buildPDBhetatmFile()
+            self._defineOutputs(outputSet=outDens)
+        elif (self.chooseOutput.get() == 0):
+            outFreq.buildPDBhetatmFile()
+            self._defineOutputs(outputSet=outFreq)
+        elif (self.chooseOutput.get()==2):
+            for roi in outFreq:
+                roiNew = StructROI()
+                roiNew.copy(roi)
+                roiNew.cleanObjId()
+                outDens.append(roiNew)
+            outDens.buildPDBhetatmFile()
+            self._defineOutputs(outputSet=outDens)
+            #outFreq.buildPDBhetatmFile()
+            #self._defineOutputs(outputSet=outFreq)
+
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
