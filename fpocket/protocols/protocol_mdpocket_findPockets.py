@@ -216,7 +216,7 @@ class MDpocketAnalyze(EMProtocol):
         scriptDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'scripts'))
         if ((self.chooseOutput.get() == 1 or self.chooseOutput.get()==2) and self.densIsoValue.get() != 8.0):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueDensArgs(), cwd=scriptDir)
-        elif ((self.chooseOutput.get() == 0 or self.chooseOutput.get()==2) and self.freqIsoValue.get() != 0.5):
+        if ((self.chooseOutput.get() == 0 or self.chooseOutput.get()==2) and self.freqIsoValue.get() != 0.5):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueFreqArgs(), cwd=scriptDir)
 
         self.cleanUp(scriptDir)
@@ -234,7 +234,14 @@ class MDpocketAnalyze(EMProtocol):
         outDens = SetOfStructROIs(filename=self._getPath('pocketsDens.sqlite'))
         outFreq = SetOfStructROIs(filename=self._getPath('pocketsFreq.sqlite'))
         if (self.useSystem.get()):
-            proteinFile = self._getPath("outputSystem.pdb")
+            filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
+            inputFile = os.path.join(filePath, 'outputSystem.pdb')
+            proteinFile = self._getExtraPath("proteinOnly.pdb")
+            print(f'----working on: {inputFile}')
+            with open(inputFile, "r") as infile, open(proteinFile, "w") as outfile:
+                for line in infile:
+                    if line.lstrip().startswith("ATOM"):
+                        outfile.write(line)
         else:
             proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
         for pFile in pocketFiles:
