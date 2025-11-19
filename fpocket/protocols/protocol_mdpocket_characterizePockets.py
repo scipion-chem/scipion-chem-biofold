@@ -156,8 +156,10 @@ class MDpocketCharacterize(EMProtocol):
                 os.remove(defaultFile)
 
         if (self.useSystem.get()):
-            filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
-            proteinFile = os.path.join(filePath, 'outputSystem.pdb')
+            #filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
+            #proteinFile = os.path.join(filePath, 'outputSystem.pdb')
+            self.convertGroToPDB()
+            proteinFile = os.path.abspath(self.getPath('inputSystem.pdb'))
         else:
             proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
 
@@ -310,3 +312,7 @@ class MDpocketCharacterize(EMProtocol):
         script_args = [os.path.abspath(file), self.distanceClustering.get(),
                        os.path.abspath(dir)]
         Plugin.runMyScript(self, "splitPockets.py", args=script_args)
+
+    def convertGroToPDB(self):
+        script_args = [os.path.abspath(self.inputSystem.get().getSystemFile()), os.path.abspath(self.getPath('inputSystem.pdb'))]
+        Plugin.runMyScript(self, "groToPdb.py", args=script_args)

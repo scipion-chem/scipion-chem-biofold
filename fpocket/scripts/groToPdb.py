@@ -1,0 +1,48 @@
+# -*- coding: utf-8 -*-
+# **************************************************************************
+# *
+# * Authors: Blanca Pueche (blanca.pueche@cnb.csic.es)
+# *
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# *
+# * This program is free software; you can redistribute it and/or modify
+# * it under the terms of the GNU General Public License as published by
+# * the Free Software Foundation; either version 2 of the License, or
+# * (at your option) any later version.
+# *
+# * This program is distributed in the hope that it will be useful,
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * GNU General Public License for more details.
+# *
+# * You should have received a copy of the GNU General Public License
+# * along with this program; if not, write to the Free Software
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# * 02111-1307  USA
+# *
+# *  All comments concerning this program package may be sent to the
+# *  e-mail address 'you@yourinstitution.email'
+# *
+# **************************************************************************
+
+import sys
+import MDAnalysis as mda
+
+if len(sys.argv) != 3:
+    print("Usage: python gro2pdb.py input.gro output.pdb")
+    sys.exit(1)
+
+input_file = sys.argv[1]
+output_file = sys.argv[2]
+
+try:
+    u = mda.Universe(input_file)
+except Exception as e:
+    print(f"[ERROR] Could not read GRO file: {input_file}")
+    print(e)
+    sys.exit(1)
+
+with mda.Writer(output_file) as pdb_writer:
+    pdb_writer.write(u.atoms)
+
+print(f"Converted {input_file} to {output_file} successfully.")
