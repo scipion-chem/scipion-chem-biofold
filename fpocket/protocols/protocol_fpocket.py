@@ -162,24 +162,27 @@ class FpocketFindPockets(EMProtocol):
         oDir = self._getExtraPath(f'{self._getInputName()}_out')
         pocketsDir = os.path.join(oDir, 'pockets')
         pqrFiles = [os.path.join(pocketsDir, f) for f in os.listdir(pocketsDir) if f.endswith('.pqr')]
-        pocketFiles = runInParallel(pqrToCif, paramList=pqrFiles, jobs=nt)
 
-        atmFiles = [f.replace('_vert', '_atm') for f in pocketFiles]
-        runInParallel(cleanMalformedCif, paramList=atmFiles, jobs=nt)
-
-        inpStruct = self.inputAtomStruct.get()
         setFile = self._getExtraPath('pockets.sqlite')
         if os.path.exists(setFile):
           os.remove(setFile)
         outSet = SetOfStructROIs(filename=setFile)
 
-        outputPocks = performBatchThreading(self.performOutputCreation, pocketFiles, nt,
-                                            inpStruct=inpStruct, cloneItem=False)
-        for i, pock in enumerate(outputPocks):
-            outSet.append(pock)
+        if len(pqrFiles) > 0:
+            pocketFiles = runInParallel(pqrToCif, paramList=pqrFiles, jobs=nt)
 
-        outHetAtmFile = os.path.join(oDir, f'{self._getInputName()}_out.cif')
-        outSet.setProteinHetatmFile(outHetAtmFile)
+            atmFiles = [f.replace('_vert', '_atm') for f in pocketFiles]
+            runInParallel(cleanMalformedCif, paramList=atmFiles, jobs=nt)
+
+            inpStruct = self.inputAtomStruct.get()
+
+            outputPocks = performBatchThreading(self.performOutputCreation, pocketFiles, nt,
+                                                inpStruct=inpStruct, cloneItem=False)
+            for i, pock in enumerate(outputPocks):
+                outSet.append(pock)
+
+            outHetAtmFile = os.path.join(oDir, f'{self._getInputName()}_out.cif')
+            outSet.setProteinHetatmFile(outHetAtmFile)
         self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outSet})
 
     def performOutputCreation(self, pocketFiles, molLists, it, inpStruct):
