@@ -191,7 +191,7 @@ class MDpocketAnalyze(EMProtocol):
                 args=self._getMDpocketSystemArgs(),
                 cwd=mdpocketDir
             )
-            pdbFile = os.path.basename(self.inputSystem.get().getAttributeValue('pdbFile'))
+            pdbFile = os.path.basename(self.getPath('inputSystem.pdb'))
             trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
             for f in [pdbFile, trajFile]:
                 path = os.path.join(mdpocketDir, f)
@@ -222,7 +222,7 @@ class MDpocketAnalyze(EMProtocol):
         self.cleanUp(scriptDir)
 
     def defineOutputStep(self):
-        pocketsDir = self._getExtraPath()
+        pocketsDir = self._getExtraPath('pocketDetection')
         if not self.keepDefaultFiles.get():
             defaultFiles = [f'{pocketsDir}/mdpout_dens_iso_8.pdb', f'{pocketsDir}/mdpout_freq_iso_0_5.pdb']
             for f in defaultFiles:
@@ -231,43 +231,40 @@ class MDpocketAnalyze(EMProtocol):
 
         pocketFiles = os.listdir(pocketsDir)
 
-        outDens = SetOfStructROIs(filename=self._getPath('pocketsDens.sqlite'))
-        outFreq = SetOfStructROIs(filename=self._getPath('pocketsFreq.sqlite'))
-        if (self.useSystem.get()):#todo what the fuck do i use as proteinFile
-            filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
-            inputFile = os.path.join(filePath, 'outputSystem.pdb')
-            proteinFile = self._getExtraPath("proteinOnly.pdb")
-            with open(inputFile, "r") as infile, open(proteinFile, "w") as outfile:
-                for line in infile:
-                    if line.lstrip().startswith("ATOM"):
-                        outfile.write(line)
-        else:
-            proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
-        for pFile in pocketFiles:
-            if '.pdb' in pFile and 'dens_' in pFile:
-                roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
-                outDens.append(roi)
-            if '.pdb' in pFile and 'freq' in pFile:
-                roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
-                outFreq.append(roi)
+        #todo now that i have the outputs in extra/pocketDetection, continue with characterization
+        #todo put a param that ets users choose which pdb output file to use as input for the characterization
+        #outDens = SetOfStructROIs(filename=self._getPath('pocketsDens.sqlite'))
+        #outFreq = SetOfStructROIs(filename=self._getPath('pocketsFreq.sqlite'))
+        #if (self.useSystem.get()):
+        #    pdbFile = self.getPath('inputSystem.pdb')
+        #    proteinFile = os.path.abspath(pdbFile)
+        #else:
+        #    proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
+        #for pFile in pocketFiles:
+        #    if '.pdb' in pFile and 'dens_' in pFile:
+        #        roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
+        #        outDens.append(roi)
+        #    if '.pdb' in pFile and 'freq' in pFile:
+        #        roi = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDpocket')
+        #        outFreq.append(roi)
 
-        if (self.chooseOutput.get() == 1):
-            outDens.buildPDBhetatmFile()
-            self._defineOutputs(outputSet=outDens)
-        elif (self.chooseOutput.get() == 0):
-            outFreq.buildPDBhetatmFile()
-            self._defineOutputs(outputSet=outFreq)
-        elif (self.chooseOutput.get()==2):
-            outDens.buildPDBhetatmFile()
-            self._defineOutputs(outputSetDens=outDens)
-            outFreq.buildPDBhetatmFile()
-            self._defineOutputs(outputSetFreq=outFreq)
+        #if (self.chooseOutput.get() == 1):
+        #    outDens.buildPDBhetatmFile()
+        #    self._defineOutputs(outputSet=outDens)
+        #elif (self.chooseOutput.get() == 0):
+        #    outFreq.buildPDBhetatmFile()
+        #    self._defineOutputs(outputSet=outFreq)
+        #elif (self.chooseOutput.get()==2):
+        #    outDens.buildPDBhetatmFile()
+        #    self._defineOutputs(outputSetDens=outDens)
+        #    outFreq.buildPDBhetatmFile()
+        #    self._defineOutputs(outputSetFreq=outFreq)
 
 
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = ["If different isovalues were selected, the new pdb files appear in the 'extra' folder."]
+        summary = ["If different isovalues were selected, the new pdb files appear in the 'extra/pocketDetection' folder."]
         return summary
 
     def _methods(self):
@@ -301,7 +298,8 @@ class MDpocketAnalyze(EMProtocol):
     def moveFiles(self):
         trajFile = self.inputSystem.get().getTrajectoryFile()
         trajectory = os.path.abspath((trajFile))
-        pdbFile = self.inputSystem.get().getAttributeValue('pdbFile')
+        pdbFile = self.getPath('inputSystem.pdb')
+        self.convertGroToPDB(self.inputSystem.get().getSystemFile(), pdbFile)
         # move files to path where mdpocket is, it is picky with where it is executed and they input files routes
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         shutil.copy(str(pdbFile), os.path.join(mdpocketDir, os.path.basename(pdbFile)))
@@ -318,7 +316,7 @@ class MDpocketAnalyze(EMProtocol):
 
     def cleanUp(self, mdpocketDir):
         outDir = self._getPath()
-        pdbDir = self._getExtraPath()
+        pdbDir = self._getExtraPath('pocketDetection')
 
         os.makedirs(outDir, exist_ok=True)
         os.makedirs(pdbDir, exist_ok=True)
@@ -332,4 +330,9 @@ class MDpocketAnalyze(EMProtocol):
                 shutil.move(src, os.path.join(outDir, f))
             elif f.endswith(".pdb"):
                 shutil.move(src, os.path.join(pdbDir, f))
+
+    def convertGroToPDB(self, input, output):
+        script_args = [os.path.abspath(input), os.path.abspath(output)]
+        Plugin.runMyScript(self, "groToPdb.py", args=script_args)
+
 
