@@ -155,30 +155,36 @@ class MDpocketCharacterize(EMProtocol):
             if os.path.exists(defaultFile):
                 os.remove(defaultFile)
 
-        if (self.useSystem.get()):#todo what the fuck do i use as proteinFile
+        if (self.useSystem.get()):
             filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
-            inputFile = os.path.join(filePath, 'outputSystem.pdb')
-            proteinFile = self._getExtraPath("proteinOnly.pdb")
-            with open(inputFile, "r") as infile, open(proteinFile, "w") as outfile:
-                for line in infile:
-                    if line.lstrip().startswith("ATOM"):
-                        outfile.write(line)
+            proteinFile = os.path.join(filePath, 'outputSystem.pdb')
         else:
             proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
 
         outputRois = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
         for pFile in pocketFiles:
-            if 'atoms.pdb' in pFile and self.chooseOutput.get():
-                outPocket = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDPocket')
-                outPocket.setVolume(outPocket.getPocketVolume())
-                outputRois.append(outPocket)
-            if 'mdpocket.pdb' in pFile:
-                self.runClustering(pFile)
-                clustersDir = self._getExtraPath('pockets')
-                clusters = os.listdir(clustersDir)
-                for c in clusters:
-                    outPocket = StructROI(filename=os.path.join(clustersDir, c), proteinFile=proteinFile, extraFile=os.path.abspath(pFile),
-                                          pClass='MDPocket')
+            if ('atoms.pdb' in pFile and self.chooseOutput.get()) or 'mdpocket.pdb' in pFile:
+                clustersDir = self._getExtraPath('pocketsAtomsFile' if 'atoms.pdb' in pFile else 'pocketsFile')
+                try:
+                    self.runClustering(pFile, clustersDir)
+                    clusters = os.listdir(clustersDir)
+                    for c in clusters:
+                        if 'corrected' not in c:
+                            outPocket = StructROI(
+                                filename=os.path.join(clustersDir, c),
+                                proteinFile=proteinFile,
+                                extraFile=os.path.abspath(pFile),
+                                pClass='MDPocket'
+                            )
+                            outPocket.setVolume(outPocket.getPocketVolume())
+                            outputRois.append(outPocket)
+                except Exception as e:
+                    print(f"[WARNING] Clustering failed for {pFile}: {e}")
+                    outPocket = StructROI(
+                        filename=os.path.join(pocketsDir, pFile),
+                        proteinFile=proteinFile,
+                        pClass='MDPocket'
+                    )
                     outPocket.setVolume(outPocket.getPocketVolume())
                     outputRois.append(outPocket)
 
@@ -299,8 +305,8 @@ class MDpocketCharacterize(EMProtocol):
             pocketFile = myPocket.getFileName()
             return os.path.abspath(pocketFile)
 
-    def runClustering(self, pFile):
+    def runClustering(self, pFile, dir):
         file = os.path.join(self._getExtraPath(), pFile)
         script_args = [os.path.abspath(file), self.distanceClustering.get(),
-                       os.path.abspath(self._getExtraPath('pockets'))]
+                       os.path.abspath(dir)]
         Plugin.runMyScript(self, "splitPockets.py", args=script_args)
