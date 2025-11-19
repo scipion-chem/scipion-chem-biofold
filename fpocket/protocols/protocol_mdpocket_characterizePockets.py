@@ -44,6 +44,8 @@ from pwchem.utils import *
 from fpocket import Plugin
 from fpocket.constants import *
 
+from scipy.cluster.hierarchy import fcluster, linkage
+
 
 class MDpocketCharacterize(EMProtocol):
     """
@@ -76,6 +78,9 @@ class MDpocketCharacterize(EMProtocol):
         form.addParam('pocket', params.StringParam,
                       label="Input specific ROI: ",
                       help='Select the specific ROI to use as input for characterization.')
+        form.addParam('distanceClustering', params.FloatParam, default=5.0,
+                      label="Threshold for clustering: ",
+                      help='Select the ditance threshold to create individual pockets from mdpocket output.')
 
         group = form.addGroup('Output generation')
         group.addParam('chooseOutput', params.BooleanParam, deafult=True,
@@ -150,11 +155,10 @@ class MDpocketCharacterize(EMProtocol):
             if os.path.exists(defaultFile):
                 os.remove(defaultFile)
 
-        if (self.useSystem.get()):
+        if (self.useSystem.get()):#todo what the fuck do i use as proteinFile
             filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
             inputFile = os.path.join(filePath, 'outputSystem.pdb')
             proteinFile = self._getExtraPath("proteinOnly.pdb")
-            print(f'----working on: {inputFile}')
             with open(inputFile, "r") as infile, open(proteinFile, "w") as outfile:
                 for line in infile:
                     if line.lstrip().startswith("ATOM"):
@@ -166,13 +170,20 @@ class MDpocketCharacterize(EMProtocol):
         for pFile in pocketFiles:
             if 'atoms.pdb' in pFile and self.chooseOutput.get():
                 outPocket = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile, pClass='MDPocket')
+                outPocket.setVolume(outPocket.getPocketVolume())
                 outputRois.append(outPocket)
-            elif '.pdb' in pFile:
-                outPocket = StructROI(filename=os.path.join(pocketsDir, pFile), proteinFile=proteinFile,
-                                      pClass='MDPocket')
-                outputRois.append(outPocket)
-            outputRois.buildPDBhetatmFile()
-            self._defineOutputs(outputROIs=outputRois)
+            if 'mdpocket.pdb' in pFile:
+                self.runClustering(pFile)
+                clustersDir = self._getExtraPath('pockets')
+                clusters = os.listdir(clustersDir)
+                for c in clusters:
+                    outPocket = StructROI(filename=os.path.join(clustersDir, c), proteinFile=proteinFile, extraFile=os.path.abspath(pFile),
+                                          pClass='MDPocket')
+                    outPocket.setVolume(outPocket.getPocketVolume())
+                    outputRois.append(outPocket)
+
+        outputRois.buildPDBhetatmFile()
+        self._defineOutputs(outputROIs=outputRois)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -287,3 +298,9 @@ class MDpocketCharacterize(EMProtocol):
         else:
             pocketFile = myPocket.getFileName()
             return os.path.abspath(pocketFile)
+
+    def runClustering(self, pFile):
+        file = os.path.join(self._getExtraPath(), pFile)
+        script_args = [os.path.abspath(file), self.distanceClustering.get(),
+                       os.path.abspath(self._getExtraPath('pockets'))]
+        Plugin.runMyScript(self, "splitPockets.py", args=script_args)

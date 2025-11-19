@@ -54,9 +54,19 @@ class Plugin(pwchemPlugin):
                                   packageVersion=FPOCKET_DIC['version'])
 
         fpocketPath = join(pwem.Config.EM_ROOT, cls.getEnvName(FPOCKET_DIC))
+        #installer.addCommand(
+        #    f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
+        #    f'{FPOCKET_DIC["name"]}_installed'
+        #)
+
         installer.addCommand(
-            f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
-            f'{FPOCKET_DIC["name"]}_installed'
+            f'conda create -y -c conda-forge -p {fpocketPath} fpocket python=3.8',
+            f'{FPOCKET_DIC["name"]}_env_created'
+        )
+
+        installer.addCommand(
+            f'conda install -y -c conda-forge -p {fpocketPath} mdanalysis',
+            'install_mdanalysis'
         )
 
         scriptsDir = join(fpocketPath, "scripts")
@@ -85,6 +95,31 @@ class Plugin(pwchemPlugin):
     @classmethod
     def runScript(cls, protocol, program, args, cwd):
         protocol.runJob(f'python {program}', arguments=args, cwd=cwd)
+
+    @classmethod
+    def runMyScript(cls, protocol, program, args=None, cwd=None):
+        """
+        Run a Python script inside the fpocket Conda environment.
+        `program` is the script name located in fpocket/scripts inside the plugin repo.
+        `args` is a list of arguments.
+        """
+        import os
+        from os.path import dirname, join
+
+        fpocketPath = cls.getVar(FPOCKET_DIC['home'])
+
+        # Path to the scripts folder inside the repository
+        repoDir = dirname(__file__)  # fpocket/__init__.py -> fpocket
+        scriptsDir = join(repoDir, "scripts")
+
+        # Full path to the script
+        scriptPath = join(scriptsDir, program)
+
+        # Build command ? note we do NOT append args here
+        cmd = f"conda run -p {fpocketPath} python {scriptPath}"
+
+        # Run the script using protocol.runJob
+        protocol.runJob(cmd, arguments=args, cwd=cwd)
 
 
 

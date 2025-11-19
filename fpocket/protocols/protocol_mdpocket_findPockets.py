@@ -233,11 +233,10 @@ class MDpocketAnalyze(EMProtocol):
 
         outDens = SetOfStructROIs(filename=self._getPath('pocketsDens.sqlite'))
         outFreq = SetOfStructROIs(filename=self._getPath('pocketsFreq.sqlite'))
-        if (self.useSystem.get()):
+        if (self.useSystem.get()):#todo what the fuck do i use as proteinFile
             filePath = os.path.dirname(self.inputSystem.get().getSystemFile())
             inputFile = os.path.join(filePath, 'outputSystem.pdb')
             proteinFile = self._getExtraPath("proteinOnly.pdb")
-            print(f'----working on: {inputFile}')
             with open(inputFile, "r") as infile, open(proteinFile, "w") as outfile:
                 for line in infile:
                     if line.lstrip().startswith("ATOM"):
@@ -263,6 +262,7 @@ class MDpocketAnalyze(EMProtocol):
             self._defineOutputs(outputSetDens=outDens)
             outFreq.buildPDBhetatmFile()
             self._defineOutputs(outputSetFreq=outFreq)
+
 
 
     # --------------------------- INFO functions -----------------------------------
