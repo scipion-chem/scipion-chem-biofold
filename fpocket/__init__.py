@@ -103,22 +103,12 @@ class Plugin(pwchemPlugin):
         `program` is the script name located in fpocket/scripts inside the plugin repo.
         `args` is a list of arguments.
         """
-        import os
         from os.path import dirname, join
-
         fpocketPath = cls.getVar(FPOCKET_DIC['home'])
-
-        # Path to the scripts folder inside the repository
-        repoDir = dirname(__file__)  # fpocket/__init__.py -> fpocket
+        repoDir = dirname(__file__)
         scriptsDir = join(repoDir, "scripts")
-
-        # Full path to the script
         scriptPath = join(scriptsDir, program)
-
-        # Build command ? note we do NOT append args here
         cmd = f"conda run -p {fpocketPath} python {scriptPath}"
-
-        # Run the script using protocol.runJob
         protocol.runJob(cmd, arguments=args, cwd=cwd)
 
 
