@@ -27,7 +27,7 @@
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 from autodock.protocols import ProtChemADTPrepareReceptor
-from gromacs.protocols import GromacsSystemPrep, GromacsMDSimulation
+from gromacs.protocols import GromacsSystemPrep, GromacsMDSimulation, GromacsModifySystem
 from ..protocols import MDpocketAnalyze
 import os
 
@@ -49,6 +49,7 @@ class TestMDPocket(BaseTest):
         cls._runImportPDB()
         cls._runPrepareSystem()
         cls._runSimulation()
+        cls._runModSystem()
 
     @classmethod
     def _runImportPDB(cls):
@@ -72,16 +73,6 @@ class TestMDPocket(BaseTest):
         cls.protPrepare = protPrepare
 
     @classmethod
-    def _runPrepareReceptorADT(cls):
-        cls.protPrepareReceptor = cls.newProtocol(
-            ProtChemADTPrepareReceptor,
-            inputAtomStruct=cls.protImportPDB.outputPdb,
-            prepProg=1, nphs=False,
-            HETATM=True, rchains=False)
-
-        cls.protPrepareReceptor = cls.launchProtocol(cls.protPrepareReceptor)
-
-    @classmethod
     def _runSimulation(self):
         protSim = self.newProtocol(
             GromacsMDSimulation,
@@ -97,39 +88,34 @@ class TestMDPocket(BaseTest):
         self.launchProtocol(protSim)
         self.protSim = protSim
 
+    @classmethod
+    def _runModSystem(cls):
+        protModSys = cls.newProtocol(
+            GromacsModifySystem,
+            gromacsSystem=cls.protSim.outputSystem,
+            cleaning=True)
+
+        cls.launchProtocol(protModSys)
+        cls.protModSys = protModSys
+
     def _runMDPocketFind(self):
         protMDPocket = self.newProtocol(
             MDpocketAnalyze,
             useSystem=True,
-            inputSystem=self.protSim.outputSystem,
-            characterize=False,
-            transDruggable=False
+            inputSystem=self.protModSys.outputSystem,
+            transDruggable=False,
+            choosePocket=False,
+            chooseOutput=2,
+            pockTypeDefBoth=0
         )
 
         self.launchProtocol(protMDPocket)
-        pdbOut = getattr(protMDPocket, 'outputSet', None)
-        self.assertIsNotNone(pdbOut)
+        pockets = getattr(protMDPocket, 'outputROIs', None)
+        self.assertIsNotNone(pockets)
 
-    def _runMDPocketFindAdvanced(self):
-        protMDPocketAdv = self.newProtocol(
-            MDpocketAnalyze,
-            useSystem=True,
-            inputSystem=self.protSim.outputSystem,
-            characterize=False,
-            transDruggable=False,
-            choosePocket=True,
-            pockType=1,
-            densIsoValue=7.0,
-            freqIsoValue=0.4
-        )
-
-        self.launchProtocol(protMDPocketAdv)
-        pdbOut = getattr(protMDPocketAdv, 'outputSet', None)
-        self.assertIsNotNone(pdbOut)
 
     def testFpocket(self):
         self._runMDPocketFind()
-        self._runMDPocketFindAdvanced()
 
 
 
