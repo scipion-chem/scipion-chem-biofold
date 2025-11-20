@@ -30,7 +30,7 @@
 This protocol is used to perform a pocket search on a protein structure using the FPocket software
 
 """
-
+import math
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -52,6 +52,9 @@ class MDpocketAnalyze(EMProtocol):
     _customFreq = 'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
     _inputFileTxt = 'mdpocketInputFile.txt'
     _inputSystemPDB = 'inputSystem.pdb'
+    _help='Choose which of the detected pockets to characterize.'
+    _labelParam = 'Pocket to characterize:'
+    _mdpocketprogram = './mdpocket'
 
     choices1Both = [
         'mdpout_dens_iso_8.pdb (Default density grid, isovalue 8.0)',
@@ -124,33 +127,33 @@ class MDpocketAnalyze(EMProtocol):
         group = form.addGroup('Pocket characterization')
         group.addParam('pockTypeDefBoth', params.EnumParam, condition='keepDefaultFiles and chooseOutput==2',
                        choices=self.choices1Both, default=0,
-                       label='Pocket to characterize:',
-                       help='Choose which of the detected pockets to characterize.'
+                       label=self._labelParam,
+                       help=self._help
                        )
         group.addParam('pockTypeNotDefBoth', params.EnumParam, condition='not keepDefaultFiles and chooseOutput==2',
                        choices=self.choices2Both, default=0,
-                       label='Pocket to characterize:',
-                       help='Choose which of the detected pockets to characterize.'
+                       label=self._labelParam,
+                       help=self._help
                        )
         group.addParam('pockTypeDefDens', params.EnumParam, condition='keepDefaultFiles and chooseOutput==1',
                        choices=self.choices1Dens, default=0,
-                       label='Pocket to characterize:',
-                       help='Choose which of the detected pockets to characterize.'
+                       label=self._labelParam,
+                       help=self._help
                        )
         group.addParam('pockTypeNotDefDens', params.EnumParam, condition='not keepDefaultFiles and chooseOutput==1',
                        choices=self.choices2Dens, default=0,
-                       label='Pocket to characterize:',
-                       help='Choose which of the detected pockets to characterize.'
+                       label=self._labelParam,
+                       help=self._help
                        )
         group.addParam('pockTypeDefFreq', params.EnumParam, condition='keepDefaultFiles and chooseOutput==0',
                        choices=self.choices1Freq, default=0,
-                       label='Pocket to characterize:',
-                       help='Choose which of the detected pockets to characterize.'
+                       label=self._labelParam,
+                       help=self._help
                        )
         group.addParam('pockTypeNotDefFreq', params.EnumParam, condition='not keepDefaultFiles and chooseOutput==0',
                        choices=self.choices2Freq, default=0,
-                       label='Pocket to characterize:',
-                       help='Choose which of the detected pockets to characterize.'
+                       label=self._labelParam,
+                       help=self._help
                        )
         group.addParam('distanceClustering', params.FloatParam, default=5.0,
                        label="Threshold for clustering: ",
@@ -242,7 +245,7 @@ class MDpocketAnalyze(EMProtocol):
             #use system
             Plugin.runMDpocket(
                 self,
-                './mdpocket',
+                self._mdpocketprogram,
                 args=self._getMDpocketDefSystemArgs(),
                 cwd=mdpocketDir
             )
@@ -256,7 +259,7 @@ class MDpocketAnalyze(EMProtocol):
             #use pdb files
             Plugin.runMDpocket(
                 self,
-                './mdpocket',
+                self._mdpocketprogram,
                 args=self._getMDpocketPDBsArgs(),
                 cwd=mdpocketDir
             )
@@ -269,9 +272,9 @@ class MDpocketAnalyze(EMProtocol):
 
     def selIsovalue(self):
         scriptDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'scripts'))
-        if ((self.chooseOutput.get() == 1 or self.chooseOutput.get()==2) and self.densIsoValue.get() != 8.0):
+        if ((self.chooseOutput.get() == 1 or self.chooseOutput.get()==2) and not math.isclose(self.densIsoValue.get(), 8.0, rel_tol=1e-9, abs_tol=1e-9)):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueDensArgs(), cwd=scriptDir)
-        if ((self.chooseOutput.get() == 0 or self.chooseOutput.get()==2) and self.freqIsoValue.get() != 0.5):
+        if ((self.chooseOutput.get() == 0 or self.chooseOutput.get()==2) and not math.isclose(self.freqIsoValue.get(), 0.5, rel_tol=1e-9, abs_tol=1e-9)):
             Plugin.runScript(self, 'extractISOPdb.py', args=self._getselIsovalueFreqArgs(), cwd=scriptDir)
 
         self.cleanUp(scriptDir)
@@ -402,7 +405,7 @@ class MDpocketAnalyze(EMProtocol):
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         Plugin.runMDpocket(
             self,
-            './mdpocket',
+            self._mdpocketprogram,
             args=self._getMDpocketCharactSystemArgs(),
             cwd=mdpocketDir
         )
@@ -496,7 +499,7 @@ class MDpocketAnalyze(EMProtocol):
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         Plugin.runMDpocket(
             self,
-            './mdpocket',
+            self._mdpocketprogram,
             args=self._getMDpocketCharactPDBsArgs(),
             cwd=mdpocketDir
         )

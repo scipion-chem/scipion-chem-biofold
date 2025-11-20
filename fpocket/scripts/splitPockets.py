@@ -51,22 +51,22 @@ def preprocessPdbAddModels(inputPdb, outputPdb):
     lines = []
     atomCounter = 1
     modelCounter = 1
-    inside_model = False
+    insideModel = False
 
     with open(inputPdb) as f:
         for line in f:
             if line.startswith("ENDMDL"):
                 lines.append(line)
-                inside_model = False
+                insideModel = False
                 continue
 
             if line.startswith(("ATOM", "HETATM")):
-                if not inside_model:
+                if not insideModel:
                     # Start a new model
                     lines.append(f"MODEL        {modelCounter}\n")
                     modelCounter += 1
                     atomCounter = 1
-                    inside_model = True
+                    insideModel = True
 
                 # Ensure line is long enough
                 line = line.rstrip().ljust(66)
