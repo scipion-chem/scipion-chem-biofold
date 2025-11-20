@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors: Lobna Ramadane Morchadi (lobna.ramadane@alumnos.upm.es)
-# *          Blanca Pueche (blanca.pueche@cnb.csic.es)
+# * Authors: Blanca Pueche (blanca.pueche@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -49,29 +48,34 @@ class MDpocketAnalyze(EMProtocol):
     _label = 'MDPocket pocket detection'
     _pocketTypes = ['Small molecule binding sites', 'Putative channels and small cavities', 'Water binding sites', 'Big external pockets']
     stepsExecutionMode = params.STEPS_PARALLEL
+    _customDens = 'mdpout_dens_iso_custom.pdb (User-selected density isovalue)'
+    _customFreq = 'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
+    _inputFileTxt = 'mdpocketInputFile.txt'
+    _inputSystemPDB = 'inputSystem.pdb'
+
     choices1Both = [
         'mdpout_dens_iso_8.pdb (Default density grid, isovalue 8.0)',
         'mdpout_freq_iso_0_5.pdb (Default frequency grid, isovalue 0.5)',
-        'mdpout_dens_iso_custom.pdb (User-selected density isovalue)',
-        'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
+        _customDens,
+        _customFreq
     ]
     choices2Both = [
-        'mdpout_dens_iso_custom.pdb (User-selected density isovalue)',
-        'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
+        _customDens,
+        _customFreq
     ]
     choices1Dens = [
         'mdpout_dens_iso_8.pdb (Default density grid, isovalue 8.0)',
-        'mdpout_dens_iso_custom.pdb (User-selected density isovalue)',
+        _customDens
     ]
     choices2Dens = [
-        'mdpout_dens_iso_custom.pdb (User-selected density isovalue)'
+        _customDens
     ]
     choices1Freq = [
         'mdpout_freq_iso_0_5.pdb (Default frequency grid, isovalue 0.5)',
-        'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
+        _customFreq
     ]
     choices2Freq = [
-        'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
+        _customFreq
     ]
 
     # -------------------------- DEFINE param functions ----------------------
@@ -174,9 +178,7 @@ class MDpocketAnalyze(EMProtocol):
         if (self.choosePocket.get()):
             selPock = self.getEnumText('pockType')
 
-            if selPock == 'Small molecule binding sites':
-                pass
-            elif selPock == 'Putative channels and small cavities':
+            if selPock == 'Putative channels and small cavities':
                 args.append(' -m 2.8 -M 5.5 -i 3')
             elif selPock == 'Water binding sites':
                 args.append('-m 3.5 -M 5.5 -i 3')
@@ -189,15 +191,13 @@ class MDpocketAnalyze(EMProtocol):
         for pocket in self.inputPDBs.get():
             routes.append(os.path.abspath(str(pocket.getFileName())))
 
-        inputFile = self._getExtraPath("mdpocketInputFile.txt")
+        inputFile = self._getExtraPath(self._inputFileTxt)
         with open(inputFile, 'w') as f:
             for pdbRoute in routes:
                 f.write(pdbRoute + '\n')
 
-
         movedFile = self.moveFilePDB()
         pluginArgs = ["-L", movedFile]
-
 
         return pluginArgs
 
@@ -246,7 +246,7 @@ class MDpocketAnalyze(EMProtocol):
                 args=self._getMDpocketDefSystemArgs(),
                 cwd=mdpocketDir
             )
-            pdbFile = os.path.basename(self.getPath('inputSystem.pdb'))
+            pdbFile = os.path.basename(self.getPath(self._inputSystemPDB))
             trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
             for f in [pdbFile, trajFile]:
                 path = os.path.join(mdpocketDir, f)
@@ -260,7 +260,7 @@ class MDpocketAnalyze(EMProtocol):
                 args=self._getMDpocketPDBsArgs(),
                 cwd=mdpocketDir
             )
-            f = "mdpocketInputFile.txt"
+            f = self._inputFileTxt
             path = os.path.join(mdpocketDir, f)
             if os.path.exists(path):
                 os.remove(path)
@@ -297,42 +297,15 @@ class MDpocketAnalyze(EMProtocol):
         pocketsDir = self._getExtraPath('pocketCharacterization')
         pocketFiles = os.listdir(pocketsDir)
 
-        if not self.chooseOutput.get():
-            defaultFile = f'{pocketsDir}/mdpout_mdpocket_atoms.pdb'
-            if os.path.exists(defaultFile):
-                os.remove(defaultFile)
-
-        if (self.useSystem.get()):
-            proteinFile = os.path.abspath(self.getPath('inputSystem.pdb'))
-        else:
-            proteinFile = self.inputPDBs.get().getFirstItem().getFileName()
+        self._cleanupDefaultFile(pocketsDir)
+        proteinFile = self._getProteinFile()
 
         outputRois = SetOfStructROIs(filename=self._getPath('pockets.sqlite'))
+
         for pFile in pocketFiles:
-            if ('mdpocket.pdb' in pFile):
-                clustersDir = self._getExtraPath('pocketCharacterization/pocketsFile')
-                try:
-                    self.runClustering((pFile), clustersDir)
-                    clusters = os.listdir(clustersDir)
-                    for c in clusters:
-                        if 'corrected' not in c:
-                            outPocket = StructROI(
-                                filename=os.path.join(clustersDir, c),
-                                proteinFile=proteinFile,
-                                extraFile=os.path.abspath(pFile),
-                                pClass='MDPocket'
-                            )
-                            outPocket.setVolume(outPocket.getPocketVolume())
-                            outputRois.append(outPocket)
-                except Exception as e:
-                    print(f"[WARNING] Clustering failed for {pFile}: {e}")
-                    outPocket = StructROI(
-                        filename=os.path.join(pocketsDir, pFile),
-                        proteinFile=proteinFile,
-                        pClass='MDPocket'
-                    )
-                    outPocket.setVolume(outPocket.getPocketVolume())
-                    outputRois.append(outPocket)
+            if 'mdpocket.pdb' not in pFile:
+                continue
+            self._processPocketFile(pFile, pocketsDir, proteinFile, outputRois)
 
         outputRois.buildPDBhetatmFile()
         self._defineOutputs(outputROIs=outputRois)
@@ -375,7 +348,7 @@ class MDpocketAnalyze(EMProtocol):
     def moveFiles(self):
         trajFile = self.inputSystem.get().getTrajectoryFile()
         trajectory = os.path.abspath((trajFile))
-        pdbFile = self.getPath('inputSystem.pdb')
+        pdbFile = self.getPath(self._inputSystemPDB)
         self.convertGroToPDB(self.inputSystem.get().getSystemFile(), pdbFile)
         # move files to path where mdpocket is, it is picky with where it is executed and they input files routes
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
@@ -385,7 +358,7 @@ class MDpocketAnalyze(EMProtocol):
         return os.path.basename(pdbFile)
 
     def moveFilePDB(self):
-        file = self._getExtraPath("mdpocketInputFile.txt")
+        file = self._getExtraPath(self._inputFileTxt)
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
         shutil.copy(str(file),  os.path.join(mdpocketDir, os.path.basename(file)))
 
@@ -433,7 +406,7 @@ class MDpocketAnalyze(EMProtocol):
             args=self._getMDpocketCharactSystemArgs(),
             cwd=mdpocketDir
         )
-        pdbFile = self.getPath('inputSystem.pdb')
+        pdbFile = self.getPath(self._inputSystemPDB)
         trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
         for f in [pdbFile, trajFile]:
             path = os.path.join(mdpocketDir, f)
@@ -467,77 +440,45 @@ class MDpocketAnalyze(EMProtocol):
         return os.path.basename(specificPocket)
 
     def getSpecifiedPocketFile(self):
-        pocketFile = ''
         filesPath = self._getExtraPath('pocketDetection')
-        name = ''
-        if (self.chooseOutput.get() == 2 and self.keepDefaultFiles.get()):
-            selected = self.pockTypeDefBoth.get()
-            if selected == 0:
-                name = self.choices1Both[0]
-            elif selected == 1:
-                name = self.choices1Both[1]
-            elif selected == 2:
-                name = self.choices1Both[2]
-            elif selected == 3:
-                name = self.choices1Both[3]
-            name = name.split()[0]
-            fileName = self.checkCustomOrDef(name)
-            pocketFile = os.path.join(filesPath, fileName)
-        elif (self.chooseOutput.get() == 2 and not self.keepDefaultFiles.get()):
-            selected = self.pockTypeNotDefBoth.get()
-            if selected == 0:
-                name = self.choices2Both[0]
-            elif selected == 1:
-                name = self.choices2Both[1]
-            name = name.split()[0]
-            fileName = self.checkCustomOrDef(name)
-            pocketFile = os.path.join(filesPath, fileName)
-        elif (self.chooseOutput.get() == 1 and self.keepDefaultFiles.get()):
-            selected = self.pockTypeDefDens.get()
-            if selected == 0:
-                name = self.choices1Dens[0]
-            elif selected == 1:
-                name = self.choices1Dens[1]
-            elif selected == 2:
-                name = self.choices1Dens[2]
-            elif selected == 3:
-                name = self.choices1Dens[3]
-            name = name.split()[0]
-            fileName = self.checkCustomOrDef(name)
-            pocketFile = os.path.join(filesPath, fileName)
-        elif (self.chooseOutput.get() == 1 and not self.keepDefaultFiles.get()):
-            selected = self.pockTypeNotDefDens.get()
-            if selected == 0:
-                name = self.choices2Dens[0]
-            elif selected == 1:
-                name = self.choices2Dens[1]
-            name = name.split()[0]
-            fileName = self.checkCustomOrDef(name)
-            pocketFile = os.path.join(filesPath, fileName)
-        if (self.chooseOutput.get() == 0 and self.keepDefaultFiles.get()):
-            selected = self.pockTypeDefFreq.get()
-            if selected == 0:
-                name = self.choices1Freq[0]
-            elif selected == 1:
-                name = self.choices1Freq[1]
-            elif selected == 2:
-                name = self.choices1Freq[2]
-            elif selected == 3:
-                name = self.choices1Freq[3]
-            name = name.split()[0]
-            fileName = self.checkCustomOrDef(name)
-            pocketFile = os.path.join(filesPath, fileName)
-        elif (self.chooseOutput.get() == 0 and not self.keepDefaultFiles.get()):
-            selected = self.pockTypeNotDefFreq.get()
-            if selected == 0:
-                name = self.choices2Freq[0]
-            elif selected == 1:
-                name = self.choices2Freq[1]
-            name = name.split()[0]
-            fileName = self.checkCustomOrDef(name)
-            pocketFile = os.path.join(filesPath, fileName)
+
+        selector, choices = self._getSelectorAndChoices()
+        if selector is None or choices is None:
+            return ''
+
+        selected = selector.get()
+        if selected < 0 or selected >= len(choices):
+            return ''
+
+        name = choices[selected].split()[0]
+        fileName = self.checkCustomOrDef(name)
+        pocketFile = os.path.join(filesPath, fileName)
 
         return os.path.abspath(pocketFile)
+
+    def _getSelectorAndChoices(self):
+        choose = self.chooseOutput.get()
+        keep = self.keepDefaultFiles.get()
+
+        if choose == 2:  # BOTH
+            if keep:
+                return self.pockTypeDefBoth, self.choices1Both
+            else:
+                return self.pockTypeNotDefBoth, self.choices2Both
+
+        elif choose == 1:  # DENS
+            if keep:
+                return self.pockTypeDefDens, self.choices1Dens
+            else:
+                return self.pockTypeNotDefDens, self.choices2Dens
+
+        elif choose == 0:  # FREQ
+            if keep:
+                return self.pockTypeDefFreq, self.choices1Freq
+            else:
+                return self.pockTypeNotDefFreq, self.choices2Freq
+
+        return None, None
 
     def checkCustomOrDef(self, name):
         filename = ''
@@ -559,7 +500,7 @@ class MDpocketAnalyze(EMProtocol):
             args=self._getMDpocketCharactPDBsArgs(),
             cwd=mdpocketDir
         )
-        f = "mdpocketInputFile.txt"
+        f = self._inputFileTxt
         path = os.path.join(mdpocketDir, f)
         if os.path.exists(path):
             os.remove(path)
@@ -569,7 +510,7 @@ class MDpocketAnalyze(EMProtocol):
         for pocket in self.inputPDBs.get():
             routes.append((str(pocket.getFileName())))
 
-        inputFile = self._getExtraPath("mdpocketInputFile.txt")
+        inputFile = self._getExtraPath(self._inputFileTxt)
         with open(inputFile, 'w') as f:
             for pdbRoute in routes:
                 f.write(os.path.abspath(pdbRoute) + '\n')
@@ -586,13 +527,58 @@ class MDpocketAnalyze(EMProtocol):
         return pluginArgs
 
     def convertGroToPDB(self, input, output):
-        script_args = [os.path.abspath(input), os.path.abspath(output)]
-        Plugin.runMyScript(self, "groToPdb.py", args=script_args)
+        scriptArgs = [os.path.abspath(input), os.path.abspath(output)]
+        Plugin.runMyScript(self, "groToPdb.py", args=scriptArgs)
 
     def runClustering(self, pFile, dir):
         file = os.path.join(self._getExtraPath('pocketCharacterization'), pFile)
-        script_args = [os.path.abspath(file), self.distanceClustering.get(),
+        scriptArgs = [os.path.abspath(file), self.distanceClustering.get(),
                        os.path.abspath(dir)]
-        Plugin.runMyScript(self, "splitPockets.py", args=script_args)
+        Plugin.runMyScript(self, "splitPockets.py", args=scriptArgs)
+
+    def _cleanupDefaultFile(self, pocketsDir):
+        if not self.chooseOutput.get():
+            defaultFile = f'{pocketsDir}/mdpout_mdpocket_atoms.pdb'
+            if os.path.exists(defaultFile):
+                os.remove(defaultFile)
+
+    def _getProteinFile(self):
+        if self.useSystem.get():
+            return os.path.abspath(self.getPath(self._inputSystemPDB))
+        return self.inputPDBs.get().getFirstItem().getFileName()
+
+    def _processPocketFile(self, pFile, pocketsDir, proteinFile, outputRois):
+        clustersDir = self._getExtraPath('pocketCharacterization/pocketsFile')
+
+        try:
+            self.runClustering(pFile, clustersDir)
+            self._addClusteredPockets(clustersDir, pFile, proteinFile, outputRois)
+
+        except Exception as e:
+            print(f"[WARNING] Clustering failed for {pFile}: {e}")
+            self._addFallbackPocket(pocketsDir, pFile, proteinFile, outputRois)
+
+    def _addClusteredPockets(self, clustersDir, pFile, proteinFile, outputRois):
+        for c in os.listdir(clustersDir):
+            if 'corrected' in c:
+                continue
+
+            outPocket = StructROI(
+                filename=os.path.join(clustersDir, c),
+                proteinFile=proteinFile,
+                extraFile=os.path.abspath(pFile),
+                pClass='MDPocket'
+            )
+            outPocket.setVolume(outPocket.getPocketVolume())
+            outputRois.append(outPocket)
+
+    def _addFallbackPocket(self, pocketsDir, pFile, proteinFile, outputRois):
+        outPocket = StructROI(
+            filename=os.path.join(pocketsDir, pFile),
+            proteinFile=proteinFile,
+            pClass='MDPocket'
+        )
+        outPocket.setVolume(outPocket.getPocketVolume())
+        outputRois.append(outPocket)
 
 

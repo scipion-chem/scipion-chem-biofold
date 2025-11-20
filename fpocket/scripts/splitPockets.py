@@ -41,7 +41,7 @@ os.makedirs(output_folder, exist_ok=True)
 # ------------------------------------------------------
 #  PREPROCESS PDB: add MODEL headers, fix numbering/occupancy/B-factor
 # ------------------------------------------------------
-def preprocess_pdb_add_models(input_pdb, output_pdb):
+def preprocessPdbAddModels(inputPdb, outputPdb):
     """
     Rewrite PDB to:
     - Add MODEL X headers if missing (before each block ending with ENDMDL)
@@ -49,11 +49,11 @@ def preprocess_pdb_add_models(input_pdb, output_pdb):
     - Fix occupancy/B-factor
     """
     lines = []
-    atom_counter = 1
-    model_counter = 1
+    atomCounter = 1
+    modelCounter = 1
     inside_model = False
 
-    with open(input_pdb) as f:
+    with open(inputPdb) as f:
         for line in f:
             if line.startswith("ENDMDL"):
                 lines.append(line)
@@ -63,17 +63,17 @@ def preprocess_pdb_add_models(input_pdb, output_pdb):
             if line.startswith(("ATOM", "HETATM")):
                 if not inside_model:
                     # Start a new model
-                    lines.append(f"MODEL        {model_counter}\n")
-                    model_counter += 1
-                    atom_counter = 1
+                    lines.append(f"MODEL        {modelCounter}\n")
+                    modelCounter += 1
+                    atomCounter = 1
                     inside_model = True
 
                 # Ensure line is long enough
                 line = line.rstrip().ljust(66)
 
                 # Renumber atom
-                line = f"{line[:6]}{atom_counter:5d}{line[11:]}"
-                atom_counter += 1
+                line = f"{line[:6]}{atomCounter:5d}{line[11:]}"
+                atomCounter += 1
 
                 # Fix occupancy
                 if line[54:60].strip() == "":
@@ -84,17 +84,17 @@ def preprocess_pdb_add_models(input_pdb, output_pdb):
 
                 lines.append(line + "\n")
 
-    with open(output_pdb, "w") as f_out:
+    with open(outputPdb, "w") as f_out:
         f_out.writelines(lines)
 
-    return output_pdb
+    return outputPdb
 
 
 # ------------------------------------------------------
 #  SAFE LOAD OF PDB (handles corrupted PDBs gracefully)
 # ------------------------------------------------------
 corrected_pdb = os.path.join(output_folder, "corrected.pdb")
-pdb_file = preprocess_pdb_add_models(pdb_file, corrected_pdb)
+pdb_file = preprocessPdbAddModels(pdb_file, corrected_pdb)
 
 try:
     u = mda.Universe(pdb_file)
