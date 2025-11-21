@@ -31,6 +31,7 @@ This protocol is used to perform a pocket search on a protein structure using th
 
 """
 import math
+import os.path
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -52,6 +53,7 @@ class MDpocketAnalyze(EMProtocol):
     _customFreq = 'mdpout_freq_iso_custom.pdb (User-selected frequency isovalue)'
     _inputFileTxt = 'mdpocketInputFile.txt'
     _inputSystemPDB = 'inputSystem.pdb'
+    _inputSystemPDBOpenMM = ''
     _help='Choose which of the detected pockets to characterize.'
     _labelParam = 'Pocket to characterize:'
     _mdpocketprogram = './mdpocket'
@@ -87,10 +89,10 @@ class MDpocketAnalyze(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('useSystem', params.BooleanParam, deafult=True,
                       label='Use MD system as input: ',
-                      help='Select input files, Yes = MD System, No = set of ROIs')
+                      help='Select input files, Yes = MD System, No = set of pdbs')
         form.addParam('inputSystem', params.PointerParam, condition='useSystem',
-                       pointerClass='GromacsSystem', allowsNull=True,
-                       label="Input gromacs system: ",
+                       pointerClass='GromacsSystem, OpenMMSystem', allowsNull=True,
+                       label="Input system: ",
                        help='Select the MD system to search for pockets.')
         form.addParam('inputPDBs', params.PointerParam, condition='not useSystem',
                       pointerClass='SetOfStructROIs,SetOfAtomStructs', allowsNull=True,
@@ -249,7 +251,10 @@ class MDpocketAnalyze(EMProtocol):
                 args=self._getMDpocketDefSystemArgs(),
                 cwd=mdpocketDir
             )
-            pdbFile = os.path.basename(self.getPath(self._inputSystemPDB))
+            if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+                pdbFile = self._inputSystemPDB
+            else:
+                pdbFile = self._inputSystemPDBOpenMM
             trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
             for f in [pdbFile, trajFile]:
                 path = os.path.join(mdpocketDir, f)
@@ -351,11 +356,22 @@ class MDpocketAnalyze(EMProtocol):
     def moveFiles(self):
         trajFile = self.inputSystem.get().getTrajectoryFile()
         trajectory = os.path.abspath((trajFile))
-        pdbFile = self.getPath(self._inputSystemPDB)
-        self.convertGroToPDB(self.inputSystem.get().getSystemFile(), pdbFile)
+        if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+            pdbFile = self.getPath(self._inputSystemPDB)
+            self.convertGroToPDB(self.inputSystem.get().getSystemFile(), pdbFile)
+        else:
+            systemPath = os.path.dirname(trajectory)
+            pdbFile = None
+            for f in os.listdir(systemPath):
+                if f.endswith(".pdb"):
+                    pdbFile = os.path.join(systemPath, f)
+                    self._inputSystemPDBOpenMM = os.path.basename(pdbFile)
+                    break
         # move files to path where mdpocket is, it is picky with where it is executed and they input files routes
         mdpocketDir = os.path.abspath(os.path.join(Plugin.getVar(FPOCKET_DIC['home']), 'bin'))
-        shutil.copy(str(pdbFile), os.path.join(mdpocketDir, os.path.basename(pdbFile)))
+        shutil.copy(str(pdbFile), os.path.join(self._getExtraPath(), os.path.basename(pdbFile)))
+        copyPdbFile = self._getExtraPath(os.path.basename(pdbFile))
+        shutil.copy(str(copyPdbFile), os.path.join(mdpocketDir, os.path.basename(copyPdbFile)))
         shutil.copy(str(trajectory), os.path.join(mdpocketDir, os.path.basename(trajectory)))
 
         return os.path.basename(pdbFile)
@@ -409,9 +425,13 @@ class MDpocketAnalyze(EMProtocol):
             args=self._getMDpocketCharactSystemArgs(),
             cwd=mdpocketDir
         )
-        pdbFile = self.getPath(self._inputSystemPDB)
+        if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+            pdbFile = self.getPath(self._inputSystemPDB)
+        else:
+            pdbFile = self._getExtraPath(self._inputSystemPDBOpenMM)
+
         trajFile = os.path.basename(self.inputSystem.get().getTrajectoryFile())
-        for f in [pdbFile, trajFile]:
+        for f in [os.path.basename(pdbFile), trajFile]:
             path = os.path.join(mdpocketDir, f)
             if os.path.exists(path):
                 os.remove(path)
@@ -533,6 +553,7 @@ class MDpocketAnalyze(EMProtocol):
         scriptArgs = [os.path.abspath(input), os.path.abspath(output)]
         Plugin.runMyScript(self, "groToPdb.py", args=scriptArgs)
 
+
     def runClustering(self, pFile, dir):
         file = os.path.join(self._getExtraPath('pocketCharacterization'), pFile)
         scriptArgs = [os.path.abspath(file), self.distanceClustering.get(),
@@ -547,7 +568,15 @@ class MDpocketAnalyze(EMProtocol):
 
     def _getProteinFile(self):
         if self.useSystem.get():
-            return os.path.abspath(self.getPath(self._inputSystemPDB))
+            print('hola')
+            if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+                return self.getPath(self._inputSystemPDB)
+            else:
+                trajFile = self.inputSystem.get().getTrajectoryFile()
+                trajectory = os.path.abspath((trajFile))
+                systemPath = os.path.dirname(trajectory)
+                return os.path.join(systemPath, self._inputSystemPDBOpenMM)
+
         return self.inputPDBs.get().getFirstItem().getFileName()
 
     def _processPocketFile(self, pFile, pocketsDir, proteinFile, outputRois):
