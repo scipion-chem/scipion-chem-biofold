@@ -96,7 +96,7 @@ class MDpocketAnalyze(EMProtocol):
                        help='Select the MD system to search for pockets.')
         form.addParam('inputPDBs', params.PointerParam, condition='not useSystem',
                       pointerClass='SetOfStructROIs,SetOfAtomStructs', allowsNull=True,
-                      label="Input set of struct ROIs: ",
+                      label="Input set of struct ROIs/set of pdbs: ",
                       help='Select the structural ROIs to use as input.')
 
         group = form.addGroup('Search parameters')
@@ -251,7 +251,7 @@ class MDpocketAnalyze(EMProtocol):
                 args=self._getMDpocketDefSystemArgs(),
                 cwd=mdpocketDir
             )
-            if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+            if 'GromacsSystem' in type(self.inputSystem.get()).__name__:
                 pdbFile = self._inputSystemPDB
             else:
                 pdbFile = self._inputSystemPDBOpenMM
@@ -356,7 +356,7 @@ class MDpocketAnalyze(EMProtocol):
     def moveFiles(self):
         trajFile = self.inputSystem.get().getTrajectoryFile()
         trajectory = os.path.abspath((trajFile))
-        if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+        if 'GromacsSystem' in type(self.inputSystem.get()).__name__:
             pdbFile = self.getPath(self._inputSystemPDB)
             self.convertGroToPDB(self.inputSystem.get().getSystemFile(), pdbFile)
         else:
@@ -425,7 +425,7 @@ class MDpocketAnalyze(EMProtocol):
             args=self._getMDpocketCharactSystemArgs(),
             cwd=mdpocketDir
         )
-        if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+        if 'GromacsSystem' in type(self.inputSystem.get()).__name__:
             pdbFile = self.getPath(self._inputSystemPDB)
         else:
             pdbFile = self._getExtraPath(self._inputSystemPDBOpenMM)
@@ -568,8 +568,7 @@ class MDpocketAnalyze(EMProtocol):
 
     def _getProteinFile(self):
         if self.useSystem.get():
-            print('hola')
-            if (self.inputSystem.get().getClass() == 'GromacsSystem'):
+            if 'GromacsSystem' in type(self.inputSystem.get()).__name__:
                 return self.getPath(self._inputSystemPDB)
             else:
                 trajFile = self.inputSystem.get().getTrajectoryFile()

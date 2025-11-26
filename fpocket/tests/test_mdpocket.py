@@ -25,9 +25,8 @@
 # **************************************************************************
 
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
-from pwem.protocols import ProtImportPdb
+from pwem.protocols import ProtImportPdb, ProtImportSetOfAtomStructs
 from autodock.protocols import ProtChemADTPrepareReceptor
-from gromacs.protocols import GromacsSystemPrep, GromacsMDSimulation, GromacsModifySystem
 from ..protocols import MDpocketAnalyze
 import os
 
@@ -41,15 +40,26 @@ summary = '''1) Minimization (steep): 100 steps, 1000.0 objective force, restrai
 
 
 class TestMDPocket(BaseTest):
+
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
-
         setupTestProject(cls)
-        cls._runImportPDB()
-        cls._runPrepareSystem()
-        cls._runSimulation()
-        cls._runModSystem()
+
+        # Intentamos importar Gromacs
+        try:
+            from gromacs.protocols import GromacsSystemPrep, GromacsMDSimulation, GromacsModifySystem
+            cls.has_gromacs = True
+        except ImportError:
+            cls.has_gromacs = False
+
+        if cls.has_gromacs:
+            cls._runImportPDB()
+            cls._runPrepareSystem()
+            cls._runSimulation()
+            cls._runModSystem()
+        else:
+            cls._runImportPDBs()
 
     @classmethod
     def _runImportPDB(cls):
@@ -61,40 +71,52 @@ class TestMDPocket(BaseTest):
         cls.protImportPDB = protImportPDB
 
     @classmethod
+    def _runImportPDBs(cls):
+        protImportPDBs = cls.newProtocol(
+            ProtImportSetOfAtomStructs,
+            inputPdbData=1,
+            filesPath=cls.ds.getPath(),
+            filesPattern='*1ake_mut*.pdb')
+        cls.proj.launchProtocol(protImportPDBs, wait=True)
+        cls.protImportPDBs = protImportPDBs
+
+    @classmethod
     def _runPrepareSystem(cls):
+        from gromacs.protocols import GromacsSystemPrep  # Import dentro del método
         protPrepare = cls.newProtocol(
             GromacsSystemPrep,
             inputStructure=cls.protImportPDB.outputPdb,
             boxType=1, sizeType=1, padDist=2.0,
             mainForceField=0, waterForceField=2,
             placeIons=1, cationType=7, anionType=1)
-
         cls.launchProtocol(protPrepare)
         cls.protPrepare = protPrepare
 
     @classmethod
-    def _runSimulation(self):
-        protSim = self.newProtocol(
+    def _runSimulation(cls):
+        from gromacs.protocols import GromacsMDSimulation
+        protSim = cls.newProtocol(
             GromacsMDSimulation,
-            gromacsSystem=self.protPrepare.outputSystem, workFlowSteps=workflow, summarySteps=summary)
+            gromacsSystem=cls.protPrepare.outputSystem,
+            workFlowSteps=workflow, summarySteps=summary)
         protSim.setObjLabel('gromacs - gmx MD sim')
 
         outIndex = protSim.getCustomIndexFile()
         if os.path.exists(outIndex):
             protSim.parseIndexFile(outIndex)
         else:
-            protSim.createIndexFile(self.protPrepare.outputSystem, inIndex=None, outIndex=protSim.getCustomIndexFile())
+            protSim.createIndexFile(cls.protPrepare.outputSystem, inIndex=None, outIndex=protSim.getCustomIndexFile())
 
-        self.launchProtocol(protSim)
-        self.protSim = protSim
+        cls.launchProtocol(protSim)
+        cls.protSim = protSim
 
     @classmethod
     def _runModSystem(cls):
+        from gromacs.protocols import GromacsModifySystem
         protModSys = cls.newProtocol(
             GromacsModifySystem,
             gromacsSystem=cls.protSim.outputSystem,
             cleaning=True)
-
         cls.launchProtocol(protModSys)
         cls.protModSys = protModSys
 
@@ -108,15 +130,29 @@ class TestMDPocket(BaseTest):
             chooseOutput=2,
             pockTypeDefBoth=0
         )
-
         self.launchProtocol(protMDPocket)
         pockets = getattr(protMDPocket, 'outputROIs', None)
         self.assertIsNotNone(pockets)
 
+    def _runMDPocketPDBs(self):
+        protMDPocket = self.newProtocol(
+            MDpocketAnalyze,
+            useSystem=False,
+            inputPDBs=self.protImportPDBs.outputAtomStructs,
+            transDruggable=False,
+            choosePocket=False,
+            chooseOutput=2,
+            pockTypeDefBoth=0
+        )
+        self.launchProtocol(protMDPocket)
+        pockets = getattr(protMDPocket, 'outputROIs', None)
+        self.assertIsNotNone(pockets)
 
     def testFpocket(self):
-        self._runMDPocketFind()
-
+        if getattr(self, 'has_gromacs', False):
+            self._runMDPocketFind()
+        else:
+            self._runMDPocketPDBs()
 
 
 
