@@ -49,7 +49,7 @@ class TestMDPocket(BaseTest):
         # Intentamos importar Gromacs
         try:
             from gromacs.protocols import GromacsSystemPrep, GromacsMDSimulation, GromacsModifySystem
-            cls.has_gromacs = False
+            cls.has_gromacs = True
         except ImportError:
             cls.has_gromacs = False
 
