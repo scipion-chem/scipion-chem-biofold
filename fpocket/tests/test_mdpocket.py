@@ -49,7 +49,7 @@ class TestMDPocket(BaseTest):
         # Intentamos importar Gromacs
         try:
             from gromacs.protocols import GromacsSystemPrep, GromacsMDSimulation, GromacsModifySystem
-            cls.has_gromacs = True
+            cls.has_gromacs = False
         except ImportError:
             cls.has_gromacs = False
 
@@ -75,8 +75,8 @@ class TestMDPocket(BaseTest):
         protImportPDBs = cls.newProtocol(
             ProtImportSetOfAtomStructs,
             inputPdbData=1,
-            filesPath=cls.ds.getPath(),
-            filesPattern='*1ake_mut*.pdb')
+            filesPath=os.path.join(cls.ds.getPath(), 'PDBx_mmCIF'),
+            filesPattern='*1ake_mut*')
         cls.proj.launchProtocol(protImportPDBs, wait=True)
         cls.protImportPDBs = protImportPDBs
 
