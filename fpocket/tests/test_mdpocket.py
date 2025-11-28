@@ -53,13 +53,14 @@ class TestMDPocket(BaseTest):
         except ImportError:
             cls.has_gromacs = False
 
+        cls._runImportPDBs()
+
         if cls.has_gromacs:
             cls._runImportPDB()
             cls._runPrepareSystem()
             cls._runSimulation()
             cls._runModSystem()
-        else:
-            cls._runImportPDBs()
+
 
     @classmethod
     def _runImportPDB(cls):
@@ -149,10 +150,10 @@ class TestMDPocket(BaseTest):
         self.assertIsNotNone(pockets)
 
     def testFpocket(self):
+        self._runMDPocketPDBs()
         if getattr(self, 'has_gromacs', False):
             self._runMDPocketFind()
-        else:
-            self._runMDPocketPDBs()
+
 
 
 
