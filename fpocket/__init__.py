@@ -54,14 +54,62 @@ class Plugin(pwchemPlugin):
                                   packageVersion=FPOCKET_DIC['version'])
 
         fpocketPath = join(pwem.Config.EM_ROOT, cls.getEnvName(FPOCKET_DIC))
-        installer.addCommand(f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
-                             f'{FPOCKET_DIC["name"]}_installed').\
-            addPackage(env, dependencies=['conda'], default=default)
+        #installer.addCommand(
+        #    f'conda create -y -c conda-forge fpocket -p {fpocketPath}',
+        #    f'{FPOCKET_DIC["name"]}_installed'
+        #)
+
+        installer.addCommand(
+            f'conda create -y -c conda-forge -p {fpocketPath} fpocket python=3.8',
+            f'{FPOCKET_DIC["name"]}_env_created'
+        )
+
+        installer.addCommand(
+            f'conda install -y -c conda-forge -p {fpocketPath} mdanalysis',
+            'install_mdanalysis'
+        )
+
+        scriptsDir = join(fpocketPath, "scripts")
+        installer.addCommand(f'mkdir -p "{scriptsDir}"', 'create_scripts_dir')
+
+        githubBase = "https://raw.githubusercontent.com/Discngine/fpocket/master/scripts"
+        script = "extractISOPdb.py"
+        installer.addCommand(
+            f'curl -L {githubBase}/{script} -o "{scriptsDir}/{script}"',
+            f'download_{script}'
+        )
+        installer.addCommand(f'chmod +x "{scriptsDir}/{script}"')
+
+        installer.addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
     def runFpocket(cls, protocol, program, args, cwd=None):
         """ Run Fpocket command from a given protocol. """
         protocol.runJob(join(cls.getVar(FPOCKET_DIC['home']), 'bin/{}'.format(program)), args, cwd=cwd)
 
-    # ---------------------------------- Utils functions  -----------------------
+    @classmethod
+    def runMDpocket(cls, protocol, program, args, cwd):
+        """ Run MDpocket command from a given protocol. """
+        protocol.runJob(f'./{program}', arguments=args, cwd=cwd)
+
+    @classmethod
+    def runScript(cls, protocol, program, args, cwd):
+        protocol.runJob(f'python {program}', arguments=args, cwd=cwd)
+
+    @classmethod
+    def runMyScript(cls, protocol, program, args=None, cwd=None):
+        """
+        Run a Python script inside the fpocket Conda environment.
+        `program` is the script name located in fpocket/scripts inside the plugin repo.
+        `args` is a list of arguments.
+        """
+        from os.path import dirname, join
+        fpocketPath = cls.getVar(FPOCKET_DIC['home'])
+        repoDir = dirname(__file__)
+        scriptsDir = join(repoDir, "scripts")
+        scriptPath = join(scriptsDir, program)
+        cmd = f"conda run -p {fpocketPath} python {scriptPath}"
+        protocol.runJob(cmd, arguments=args, cwd=cwd)
+
+
 
