@@ -23,18 +23,18 @@ with open('requirements.txt') as f:
 # Fields marked as "Optional" may be commented out.
 
 setup(
-    name='scipion-chem-fpocket',  # Required
+    name='scipion-chem-biofold',  # Required
     version='0.1',  # Required
-    description='Scipion plugin in order to use ther fpocket software',  # Required
+    description='Scipion plugin in order to use ther biofold software',  # Required
     long_description=long_description,  # Optional
-    url='https://github.com/scipion-chem/scipion-chem-fpocket',  # Optional
-    author='Daniel Del Hoyo',  # Optional
-    author_email='ddelhoyo@cnb.csic.es',  # Optional
-    keywords='scipion fpocket scipion-3.0 cheminformatics',  # Optional
+    url='https://github.com/scipion-chem/scipion-chem-biofold',  # Optional
+    author='Blanca Pueche',  # Optional
+    author_email='blanca.pueche@cnb.csic.es',  # Optional
+    keywords='scipion biofold scipion-3.0 cheminformatics',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
-    entry_points={'pyworkflow.plugin': 'fpocket = fpocket'},
+    entry_points={'pyworkflow.plugin': 'biofold = biofold'},
     package_data={  # Optional
-       'fpocket': ['fpocket_logo.png', 'protocols.conf'],
+       'biofold': [ 'protocols.conf'],
     }
 )

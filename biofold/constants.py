@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors: Blanca Pueche (blanca.pueche@cnb.csic.es)
+# * Authors: Daniel Del Hoyo Gomez
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -21,28 +20,11 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
 
-import sys
-import MDAnalysis as mda
 
-if len(sys.argv) != 3:
-    print("Usage: python gro2pdb.py input.gro output.pdb")
-    sys.exit(1)
+BOLTZ_DIC = {'name': 'boltz', 'version': '2.2.1', 'home': 'BOLTZ_HOME'}
+CHAI_DIC = {'name': 'chai', 'version': '0.6.1', 'home': 'CHAI_HOME'}
 
-input_file = sys.argv[1]
-output_file = sys.argv[2]
-
-try:
-    u = mda.Universe(input_file)
-except Exception as e:
-    print(f"[ERROR] Could not read GRO file: {input_file}")
-    print(e)
-    sys.exit(1)
-
-with mda.Writer(output_file) as pdb_writer:
-    pdb_writer.write(u.atoms)
-
-print(f"Converted {input_file} to {output_file} successfully.")

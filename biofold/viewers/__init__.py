@@ -4,4 +4,4 @@
 # Find documentation here: https://scipion-em.github.io/docs/docs/developer/creating-a-viewer
 # **************************************************************************
 
-from fpocket.viewers.viewer_pockets import viewerFPocket
+from .viewer_alphafold3 import ProtAlphaFold3Viewer
