@@ -29,12 +29,12 @@ import os
 import re
 import shutil
 import pyworkflow.protocol.params as params
-from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from biofold.constants import BOLTZ_DIC
 
 from pwem.objects import  AtomStruct, SetOfAtomStructs
+from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 
 
 class ProtBoltz(EMProtocol):
@@ -42,6 +42,7 @@ class ProtBoltz(EMProtocol):
     Protocol to use Boltz-2 model.
     """
     _label = 'boltz-2 modelling'
+    protSeq = ProtDefineSetOfSequences()
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -49,41 +50,58 @@ class ProtBoltz(EMProtocol):
         Params:
             form: this is the form to be populated with sections and params.
         """
-        #todo build my own files to use as .yaml
         form.addSection(label='Input')
 
-        form.addParam('oneFile', params.BooleanParam, default=True, label='One single file: ')
-        form.addParam('file', params.FileParam, condition='oneFile',
-                      label='Sequence file: ',
-                      help='Select the results folder downloaded from the AlphaFold3 server.')
-        form.addParam('filesPath', params.PathParam, condition='not oneFile',
-                       label="Sequences files directory: ",
-                       help="Directory with the files you want to import.\n\n"
-                            "Files should be .yaml")
+        form.addParam('inputOrigin', params.EnumParam, default=0,
+                       label='Input origin: ', choices=['Sequence', 'AtomStruct', 'PDB code'],
+                       help='Input origin to add to the set')
+
+        #todo does not work (wizard) ask dani
+        self.protSeq._addInputForm(form)
+        form.addParam('inputList', params.TextParam, width=100,
+                       default='', label='List of inputs: ',
+                       help='The list of input to use for the final output set.')
 
         form = form.addGroup('Parameters')
         form.addParam('infPot', params.BooleanParam, default=False,
                         label="Inference potentials: ",
-                        help='Choose whether to use inference potentials to improve physical plausability of the predicted poses.')
+                        help='Choose whether to use inference potentials to improve physical plausibility of the predicted poses.')
         form.addParam('recyclingSteps', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
                         label='Recycling steps: ', help="Number of recycling steps for prediction.")
         form.addParam('samplingSteps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
         form.addParam('diffusionSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
-                        label='Difussion samples: ', help="Number of diffusion samples for prediction.")
+                        label='Diffusion samples: ', help="Number of diffusion samples for prediction.")
         form.addParam('stepScale', params.FloatParam, default=1.638,
                         label='Steps size: ', help="Number of step size. Its related to the temperature at which the diffusion process samples the distribution.")
         form.addParam('affinityMWcorr', params.BooleanParam, default=False,
                        label="Molecular weight correction: ",
                        help='Choose whether to add the molecular weight correction to the affinity prediction.')
         form.addParam('diffusionSamplesAff', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
-                       label='Difussion samples for affinity: ', help="Number of diffusion samples for affinity.")
+                       label='Diffusion samples for affinity: ', help="Number of diffusion samples for affinity.")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.runBoltzStep)
-        #self._insertFunctionStep(self.extractPlddtStep)
+        #todo script to build yaml file
+        self._insertFunctionStep(self.createInputFileStep)
+        #self._insertFunctionStep(self.runBoltzStep)
+        #self._insertFunctionStep(self.extractscoreStep)
         #self._insertFunctionStep(self.createOutputStep)
+
+    def createInputFileStep(self):
+        #todo cambiar cuando funcione el wizard
+
+        if self.inputOrigin.get() == 0: #sequence
+            input = self.inputSequence.get()
+            sequence = input.getSequence()
+
+        elif self.inputOrigin.get() == 1: #atomstruct
+            input = self.inputAtomStruct.get()
+        else:
+            input = self.inputPDB.get() #todo think how to use this
+
+
+
 
     def runBoltzStep(self):
         if self.oneFile.get():
@@ -135,17 +153,17 @@ class ProtBoltz(EMProtocol):
         if not self.extraFiles:
             raise Exception("No CIF files found in the selected folder.")
 
-    def extractPlddtStep(self):
-        """Extract per-residue pLDDT and compute mean pLDDT per model"""
+    def extractscoreStep(self):
+        """Extract per-residue score and compute mean score per model"""
         extraPath = self._getExtraPath()
-        self.meanPlddt = {}
+        self.meanscore = {}
 
         for cifName in self.extraFiles:
             cifPath = os.path.join(extraPath, cifName)
             modelName = os.path.splitext(cifName)[0]
 
             headers = []
-            plddtValues = []
+            scoreValues = []
             seenResidues = set()
 
             with open(cifPath) as f:
@@ -166,14 +184,14 @@ class ProtBoltz(EMProtocol):
                         continue
                     cols = re.sub(r'\s+', ' ', line.strip()).split()
                     resnum = int(cols[colIndex['auth_seq_id']])
-                    plddt = float(cols[colIndex['B_iso_or_equiv']])
+                    score = float(cols[colIndex['B_iso_or_equiv']])
                     if resnum not in seenResidues:
                         seenResidues.add(resnum)
-                        plddtValues.append(plddt)
+                        scoreValues.append(score)
 
-            self.meanPlddt[modelName] = sum(plddtValues) / len(plddtValues)
+            self.meanscore[modelName] = sum(scoreValues) / len(scoreValues)
 
-        self.bestModel = max(self.meanPlddt, key=self.meanPlddt.get)
+        self.bestModel = max(self.meanscore, key=self.meanscore.get)
 
     def createOutputStep(self):
         """Define Scipion outputs"""
