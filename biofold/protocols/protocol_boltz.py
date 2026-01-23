@@ -31,6 +31,7 @@ import os
 import re
 import shutil
 import pyworkflow.protocol.params as params
+from biofold.objects import BoltzEntity
 from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from biofold.constants import BOLTZ_DIC
@@ -237,14 +238,3 @@ class ProtBoltz(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
 
 
-class BoltzEntity: #todo move this to objects or smth
-    def __init__(self, entity_type, chain_id, sequence=None,
-                 smiles=None, ccd=None, msa=None, cyclic=False):
-        self.entity_type = entity_type
-        self.ids = [chain_id]
-        self.sequence = sequence
-        self.smiles = smiles
-        self.ccd = ccd
-        self.msa = msa
-        self.cyclic = cyclic
-        self.modifications = []
