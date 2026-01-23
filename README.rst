@@ -20,7 +20,7 @@ You will need to first install
 
 1. **Install the plugin in Scipion**
 
-Fpocket is installed automatically by scipion.
+Biofold is installed automatically by scipion.
 
 - **Install the stable version (Not available yet)**
 
