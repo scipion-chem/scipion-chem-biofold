@@ -27,10 +27,22 @@
 
 from biofold.protocols import ProtBoltz
 
-from pwchem.wizards import SelectChainWizardQT
+from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, AddSequenceWizard
 
 SelectChainWizardQT().addTarget(protocol=ProtBoltz,
                                 targets=['inpChain'],
                                 inputs=[{'inputOrigin': ['inputSequence',
                                                          'inputAtomStruct', 'inputPDB']}],
                                 outputs=['inpChain'])
+
+SelectResidueWizardQT().addTarget(protocol=ProtBoltz,
+                                  targets=['inpPositions'],
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
+                                          'inpChain'],
+                                  outputs=['inpPositions'])
+
+AddSequenceWizard().addTarget(protocol=ProtBoltz,
+                              targets=['addInput'],
+                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
+                                      'inpChain', 'inpPositions'],
+                              outputs=['inputList', 'inputPointers'])

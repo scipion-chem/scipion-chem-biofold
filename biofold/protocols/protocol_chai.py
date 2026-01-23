@@ -151,8 +151,8 @@ class ProtChai(EMProtocol):
         bestStruct = AtomStruct(filename=bestSrc)
 
         self._defineOutputs(
-            outputSetOfAtomStructs=outputSet,
-            outputBestAtomStruct=bestStruct
+            outputBestAtomStruct=bestStruct,
+            outputSetOfAtomStructs=outputSet
         )
 
     # --------------------------- INFO functions -----------------------------------

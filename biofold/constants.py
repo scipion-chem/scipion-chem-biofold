@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors: Daniel Del Hoyo Gomez
+# * Authors: Blanca Pueche
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *

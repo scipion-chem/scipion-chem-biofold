@@ -137,10 +137,9 @@ class ProtAlphaFold3(EMProtocol):
         bestStruct = AtomStruct(filename=bestSrc)
 
         self._defineOutputs(
-            outputSetOfAtomStructs=outputSet,
-            outputBestAtomStruct=bestStruct
+            outputBestAtomStruct=bestStruct,
+            outputSetOfAtomStructs=outputSet
         )
-
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []

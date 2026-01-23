@@ -23,6 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import json
+import string
 import zipfile
 
 import os
@@ -35,6 +37,11 @@ from biofold.constants import BOLTZ_DIC
 
 from pwem.objects import  AtomStruct, SetOfAtomStructs
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
+from pwchem.utils.utilsFasta import parseFasta
+
+from collections import defaultdict
+import yaml
+
 
 
 class ProtBoltz(EMProtocol):
@@ -56,8 +63,8 @@ class ProtBoltz(EMProtocol):
                        label='Input origin: ', choices=['Sequence', 'AtomStruct', 'PDB code'],
                        help='Input origin to add to the set')
 
-        #todo does not work (wizard) ask dani
         self.protSeq._addInputForm(form)
+
         form.addParam('inputList', params.TextParam, width=100,
                        default='', label='List of inputs: ',
                        help='The list of input to use for the final output set.')
@@ -82,34 +89,88 @@ class ProtBoltz(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        #todo script to build yaml file
         self._insertFunctionStep(self.createInputFileStep)
-        #self._insertFunctionStep(self.runBoltzStep)
-        #self._insertFunctionStep(self.extractscoreStep)
-        #self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.runBoltzStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def createInputFileStep(self):
-        #todo cambiar cuando funcione el wizard
+        entities = []
 
-        if self.inputOrigin.get() == 0: #sequence
-            input = self.inputSequence.get()
-            sequence = input.getSequence()
+        chain_id_iter = iter(string.ascii_uppercase)
 
-        elif self.inputOrigin.get() == 1: #atomstruct
-            input = self.inputAtomStruct.get()
-        else:
-            input = self.inputPDB.get() #todo think how to use this
+        for inputLine in self.inputList.get().split('\n'):
+            if not inputLine.strip():
+                continue
 
+            inpJson = json.loads(inputLine.split(')')[1].strip())
 
+            seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
+            _, sequence = next(iter(seqDic.items()))
+
+            chain_id = next(chain_id_iter)
+
+            entity = BoltzEntity(
+                entity_type="protein",  # TODO extend to dna / rna / ligand
+                chain_id=chain_id,
+                sequence=sequence,
+                cyclic=False
+            )
+            entities.append(entity)
+        merged = {}
+        for e in entities:
+            key = (
+                e.entity_type,
+                e.sequence,
+                e.smiles,
+                e.ccd,
+                e.msa,
+                e.cyclic
+            )
+            if key not in merged:
+                merged[key] = e
+            else:
+                merged[key].ids.extend(e.ids)
+
+        yaml_sequences = []
+
+        for e in merged.values():
+            body = {
+                "id": e.ids if len(e.ids) > 1 else e.ids[0],
+                "cyclic": e.cyclic
+            }
+
+            if e.entity_type in ("protein", "dna", "rna"):
+                body["sequence"] = e.sequence
+                if e.msa is not None:
+                    body["msa"] = e.msa
+                if e.modifications:
+                    body["modifications"] = e.modifications
+
+            elif e.entity_type == "ligand":
+                if e.smiles:
+                    body["smiles"] = e.smiles
+                elif e.ccd:
+                    body["ccd"] = e.ccd
+                else:
+                    raise Exception("Ligand must define smiles or ccd")
+
+            yaml_sequences.append({e.entity_type: body})
+
+        boltz_yaml = {
+            "version": 1,
+            "sequences": yaml_sequences
+        }
+
+        yaml_path = os.path.abspath(self._getPath("input.yaml"))
+        with open(yaml_path, "w") as f:
+            yaml.safe_dump(boltz_yaml, f, sort_keys=False)
+
+        self.inputYaml = yaml_path
 
 
     def runBoltzStep(self):
-        if self.oneFile.get():
-            filePath = os.path.abspath(self.file.get())
-            args = [str(filePath)]
-        else:
-            filePath = os.path.abspath(self.filesPath.get())
-            args = [str(filePath)]
+        filePath = os.path.abspath(self._getPath("input.yaml"))
+        args = [str(filePath)]
 
         if self.infPot.get():
             args.append("--use_potentials")
@@ -134,87 +195,26 @@ class ProtBoltz(EMProtocol):
             cwd=os.path.abspath(Plugin.getVar(BOLTZ_DIC['home']))
         )
 
-
-    def convertStep(self):
-        """Copy CIF files into the protocol extra folder"""
-        self.extraFiles = []
-
-        filePath = self.folder.get()
-        extraPath = self._getExtraPath()
-        os.makedirs(extraPath, exist_ok=True)
-
-        with zipfile.ZipFile(filePath, 'r') as zip_ref:
-            zip_ref.extractall(extraPath)
-
-        for name in sorted(os.listdir(extraPath)):
-            if name.lower().endswith('.cif'):
-                self.extraFiles.append(name)
-
-        if not self.extraFiles:
-            raise Exception("No CIF files found in the selected folder.")
-
-    def extractscoreStep(self):
-        """Extract per-residue score and compute mean score per model"""
-        extraPath = self._getExtraPath()
-        self.meanscore = {}
-
-        for cifName in self.extraFiles:
-            cifPath = os.path.join(extraPath, cifName)
-            modelName = os.path.splitext(cifName)[0]
-
-            headers = []
-            scoreValues = []
-            seenResidues = set()
-
-            with open(cifPath) as f:
-                for line in f:
-                    if line.startswith('_atom_site.'):
-                        headers.append(line.strip())
-                    elif line.startswith('ATOM'):
-                        break
-
-            colIndex = {h.split('.')[-1]: i for i, h in enumerate(headers)}
-
-            if 'B_iso_or_equiv' not in colIndex:
-                raise Exception(f"No score field in {cifName}")
-
-            with open(cifPath) as f:
-                for line in f:
-                    if not line.startswith('ATOM'):
-                        continue
-                    cols = re.sub(r'\s+', ' ', line.strip()).split()
-                    resnum = int(cols[colIndex['auth_seq_id']])
-                    score = float(cols[colIndex['B_iso_or_equiv']])
-                    if resnum not in seenResidues:
-                        seenResidues.add(resnum)
-                        scoreValues.append(score)
-
-            self.meanscore[modelName] = sum(scoreValues) / len(scoreValues)
-
-        self.bestModel = max(self.meanscore, key=self.meanscore.get)
-
     def createOutputStep(self):
-        """Define Scipion outputs"""
-        extraPath = self._getExtraPath()
-        outPath = os.path.join(extraPath, 'outputs')
-        os.makedirs(outPath, exist_ok=True)
+        """Define outputs for Boltz-2 protocol (single input folder, possibly multiple CIFs)."""
+        predictionsPath = os.path.join(os.path.abspath(self._getPath()), "boltz_results_input", "predictions")
 
-        outputSet = SetOfAtomStructs.create(self._getPath())
+        inputFolders = [f for f in os.listdir(predictionsPath) if os.path.isdir(os.path.join(predictionsPath, f))]
+        if not inputFolders:
+            raise Exception(f"No prediction folders found in {predictionsPath}")
 
-        for cifName in self.extraFiles:
-            src = os.path.join(extraPath, cifName)
-            dst = os.path.join(outPath, cifName)
-            shutil.copy(src, dst)
+        inputFolder = os.path.join(predictionsPath, inputFolders[0])
 
-            atomStruct = AtomStruct(filename=dst)
-            outputSet.append(atomStruct)
+        cifFiles = sorted([f for f in os.listdir(inputFolder) if f.lower().endswith('.cif')])
+        if not cifFiles:
+            raise Exception(f"No CIF files found in {inputFolder}")
 
-        bestSrc = os.path.join(extraPath, self.bestModel + '.cif')
-        bestStruct = AtomStruct(filename=bestSrc)
+        cifPath = os.path.join(inputFolder, cifFiles[0])
+
+        bestStruct = AtomStruct(filename=cifPath)
 
         self._defineOutputs(
-            outputSetOfAtomStructs=outputSet,
-            outputBestAtomStruct=bestStruct
+            outputAtomStruct=bestStruct
         )
 
     # --------------------------- INFO functions -----------------------------------
@@ -235,3 +235,16 @@ class ProtBoltz(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+
+
+class BoltzEntity: #todo move this to objects or smth
+    def __init__(self, entity_type, chain_id, sequence=None,
+                 smiles=None, ccd=None, msa=None, cyclic=False):
+        self.entity_type = entity_type
+        self.ids = [chain_id]
+        self.sequence = sequence
+        self.smiles = smiles
+        self.ccd = ccd
+        self.msa = msa
+        self.cyclic = cyclic
+        self.modifications = []
