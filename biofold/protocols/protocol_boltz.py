@@ -59,16 +59,25 @@ class ProtBoltz(EMProtocol):
             form: this is the form to be populated with sections and params.
         """
         form.addSection(label='Input')
-
         form.addParam('inputOrigin', params.EnumParam, default=0,
                        label='Input origin: ', choices=['Sequence', 'AtomStruct', 'PDB code'],
                        help='Input origin to add to the set')
-
+        #todo how do i put the cyclic thing? i think maybe creating my own addInputForm and addint a 'cyclic' param
         self.protSeq._addInputForm(form)
 
         form.addParam('inputList', params.TextParam, width=100,
                        default='', label='List of inputs: ',
                        help='The list of input to use for the final output set.')
+
+        #todo also add ligand input
+        form.addParam('ligand', params.BooleanParam, default=False,
+                      label="Add ligands: ",
+                      help='Choose whether to add ligands.')
+        form = form.addGroup('Ligand input')
+        form.addParam('inputLigandOrigin', params.EnumParam, default=0,
+                      label='Input origin: ', choices=['Smiles', 'File', 'CCD'],
+                      help='Input origin to add to the set')
+        #todo input form to add more than one ligand -- similar to the input above
 
         form = form.addGroup('Parameters')
         form.addParam('infPot', params.BooleanParam, default=False,
