@@ -41,8 +41,6 @@ from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOf
 from pwchem.utils.utilsFasta import parseFasta
 
 from collections import defaultdict
-import yaml
-
 
 
 class ProtBoltz(EMProtocol):
@@ -73,8 +71,8 @@ class ProtBoltz(EMProtocol):
         form.addParam('ligand', params.BooleanParam, default=False,
                       label="Add ligands: ",
                       help='Choose whether to add ligands.')
-        form = form.addGroup('Ligand input')
-        form.addParam('inputLigandOrigin', params.EnumParam, default=0,
+        lig = form.addGroup('Ligand input')
+        lig.addParam('inputLigandOrigin', params.EnumParam, default=0,
                       label='Input origin: ', choices=['Smiles', 'File', 'CCD'],
                       help='Input origin to add to the set')
         #todo input form to add more than one ligand -- similar to the input above
@@ -103,9 +101,9 @@ class ProtBoltz(EMProtocol):
         self._insertFunctionStep(self.runBoltzStep)
         self._insertFunctionStep(self.createOutputStep)
 
+    #todo create a script to do this, yaml is not being imported
     def createInputFileStep(self):
         entities = []
-
         chain_id_iter = iter(string.ascii_uppercase)
 
         for inputLine in self.inputList.get().split('\n'):
@@ -113,19 +111,19 @@ class ProtBoltz(EMProtocol):
                 continue
 
             inpJson = json.loads(inputLine.split(')')[1].strip())
-
             seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
             _, sequence = next(iter(seqDic.items()))
 
             chain_id = next(chain_id_iter)
 
             entity = BoltzEntity(
-                entity_type="protein",  # TODO extend to dna / rna / ligand
+                entity_type="protein",
                 chain_id=chain_id,
                 sequence=sequence,
                 cyclic=False
             )
             entities.append(entity)
+
         merged = {}
         for e in entities:
             key = (
@@ -141,8 +139,7 @@ class ProtBoltz(EMProtocol):
             else:
                 merged[key].ids.extend(e.ids)
 
-        yaml_sequences = []
-
+        sequences = []
         for e in merged.values():
             body = {
                 "id": e.ids if len(e.ids) > 1 else e.ids[0],
@@ -151,35 +148,34 @@ class ProtBoltz(EMProtocol):
 
             if e.entity_type in ("protein", "dna", "rna"):
                 body["sequence"] = e.sequence
-                if e.msa is not None:
+                if e.msa:
                     body["msa"] = e.msa
-                if e.modifications:
-                    body["modifications"] = e.modifications
-
             elif e.entity_type == "ligand":
                 if e.smiles:
                     body["smiles"] = e.smiles
                 elif e.ccd:
                     body["ccd"] = e.ccd
-                else:
-                    raise Exception("Ligand must define smiles or ccd")
 
-            yaml_sequences.append({e.entity_type: body})
+            sequences.append({e.entity_type: body})
 
-        boltz_yaml = {
-            "version": 1,
-            "sequences": yaml_sequences
-        }
+        json_path = os.path.abspath(self._getPath("input.json"))
+        yaml_path = os.path.abspath(self._getPath("inputBoltz.yaml"))
 
-        yaml_path = os.path.abspath(self._getPath("input.yaml"))
-        with open(yaml_path, "w") as f:
-            yaml.safe_dump(boltz_yaml, f, sort_keys=False)
+        with open(json_path, "w") as f:
+            json.dump({"sequences": sequences}, f, indent=2)
 
-        self.inputYaml = yaml_path
+        script_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "buildYaml.py")
+
+        Plugin.runCondaCommand(
+            self,
+            program="python",
+            args=f"{script_path} {json_path} {yaml_path}",
+            condaDic=BOLTZ_DIC
+        )
 
 
     def runBoltzStep(self):
-        filePath = os.path.abspath(self._getPath("input.yaml"))
+        filePath = os.path.abspath(self._getPath("inputBoltz.yaml"))
         args = [str(filePath)]
 
         if self.infPot.get():
