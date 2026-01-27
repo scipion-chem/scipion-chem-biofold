@@ -159,7 +159,7 @@ class ProtBoltz(EMProtocol):
             sequences.append({e.entity_type: body})
 
         json_path = os.path.abspath(self._getPath("input.json"))
-        yaml_path = os.path.abspath(self._getPath("inputBoltz.yaml"))
+        yaml_path = os.path.abspath(self._getPath("input.yaml"))
 
         with open(json_path, "w") as f:
             json.dump({"sequences": sequences}, f, indent=2)
@@ -175,7 +175,7 @@ class ProtBoltz(EMProtocol):
 
 
     def runBoltzStep(self):
-        filePath = os.path.abspath(self._getPath("inputBoltz.yaml"))
+        filePath = os.path.abspath(self._getPath("input.yaml"))
         args = [str(filePath)]
 
         if self.infPot.get():
