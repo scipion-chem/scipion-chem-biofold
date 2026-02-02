@@ -117,6 +117,14 @@ class ProtAlphaFold3(EMProtocol):
 
         self.bestModel = max(self.meanPlddt, key=self.meanPlddt.get)
 
+        resultsFile = self._getPath('results.txt')
+        with open(resultsFile, 'w') as f:
+            for model, plddt in self.meanPlddt.items():
+                f.write(f"{model}\t{plddt:.2f}\n")
+            f.write(f"BEST\t{self.bestModel}\n")
+
+        self._store()
+
     def createOutputStep(self):
         """Define Scipion outputs"""
         extraPath = self._getExtraPath()
@@ -140,9 +148,24 @@ class ProtAlphaFold3(EMProtocol):
             outputBestAtomStruct=bestStruct,
             outputSetOfAtomStructs=outputSet
         )
+
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
+        resultsFile = self._getPath('results.txt')
+
+        if os.path.exists(resultsFile):
+            summary.append("Mean pLDDT per model:")
+            with open(resultsFile) as f:
+                for line in f:
+                    if line.startswith("BEST"):
+                        bestModel = line.split()[1]
+                    else:
+                        model, plddt = line.split()
+                        summary.append(f"  {model}: {plddt}")
+
+            summary.append(f"\nBest structure (highest mean pLDDT): {bestModel}")
+
         return summary
 
     def _methods(self):
