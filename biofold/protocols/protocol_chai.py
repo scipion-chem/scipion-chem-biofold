@@ -43,6 +43,7 @@ class ProtChai(EMProtocol):
     Protocol to use Chai-1 model.
     """
     _label = 'chai-1 modelling'
+    NEWFILE = False
 
     # -------------------------- DEFINE param functions ----------------------
     def _addInputForm(self, form):
@@ -89,7 +90,7 @@ class ProtChai(EMProtocol):
 
         form.addParam('file', params.FileParam, condition='inputOrigin == 2',
                       label='Sequence file: ',
-                      help='Select the fasta file. The format of the fasta file can be seen in https://github.com/chaidiscovery/chai-lab/tree/main.')
+                      help='Select the fasta file.')
 
 
         form = form.addGroup('Parameters')
@@ -109,6 +110,8 @@ class ProtChai(EMProtocol):
     def _insertAllSteps(self):
         if (self.inputOrigin.get() != 2):
             self._insertFunctionStep(self.createInputFileStep)
+        else:
+            self._insertFunctionStep(self.ensureFastaHasNames)
         self._insertFunctionStep(self.runChaiStep)
         self._insertFunctionStep(self.extractScoreStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -152,7 +155,7 @@ class ProtChai(EMProtocol):
                 f.write(f"{sequence}\n")
 
     def runChaiStep(self):
-        if (self.inputOrigin.get() == 2):
+        if (self.inputOrigin.get() == 2 and not self.NEWFILE):
             filePath = os.path.abspath(self.file.get())
         else:
             filePath = os.path.abspath(self._getPath('input.fasta'))
@@ -297,3 +300,69 @@ class ProtChai(EMProtocol):
             raise Exception("No CIF files found in the selected folder.")
 
         return extraFiles
+
+    def guessEntityType(self, sequence):
+        seq = sequence.upper()
+        dna_letters = set("ACGT")
+        rna_letters = set("ACGU")
+        protein_letters = set("ACDEFGHIKLMNPQRSTVWY")
+
+        seq_set = set(seq)
+
+        # check for RNA (U present, T absent)
+        if "U" in seq_set and "T" not in seq_set:
+            return "rna"
+        # check for DNA (T present, U absent)
+        elif "T" in seq_set and "U" not in seq_set and seq_set <= dna_letters:
+            return "dna"
+        # check for protein: contains amino acid letters not in DNA/RNA
+        elif seq_set <= protein_letters:
+            return "protein"
+        else:
+            return "protein"
+
+    def ensureFastaHasNames(self):
+        fastaPath = os.path.abspath(self.file.get())
+        outputPath = os.path.join(self._getPath('input.fasta'))
+
+        with open(fastaPath) as f:
+            lines = f.readlines()
+
+        fixedLines = []
+        counter = 1
+        sequence_buffer = ""
+        current_header = None
+
+
+        for line in lines:
+            line = line.rstrip("\n")
+            if line.startswith(">"):
+                if current_header is not None:
+                    entity_type = self.guessEntityType(sequence_buffer)
+                    self.writeSequence(entity_type, current_header, sequence_buffer, counter, fixedLines)
+                    counter += 1
+
+                header = line[1:]
+                if "|name=" in header:
+                    header = header.split("|name=")[-1]
+                current_header = header
+                sequence_buffer = ""
+            else:
+                sequence_buffer += line.strip()
+
+        if current_header is not None:
+            entity_type = self.guessEntityType(sequence_buffer)
+            self.writeSequence(entity_type, current_header, sequence_buffer, counter, fixedLines)
+            counter += 1
+
+        with open(outputPath, 'w') as f:
+            f.writelines(fixedLines)
+
+        self.NEWFILE = True
+
+    def writeSequence(self, entity_type, header, sequence, counter, fixedLines):
+        if not header:
+            header = f"seq{counter}"
+        fixedLines.append(f">{entity_type}|{header}\n")
+        for i in range(0, len(sequence), 80):
+            fixedLines.append(sequence[i:i + 80] + "\n")
