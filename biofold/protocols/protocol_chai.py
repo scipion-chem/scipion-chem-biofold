@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import json
 import zipfile
 
 import os
@@ -44,16 +45,52 @@ class ProtChai(EMProtocol):
     _label = 'chai-1 modelling'
 
     # -------------------------- DEFINE param functions ----------------------
+    def _addInputForm(self, form):
+        form.addParam('inputSequence', params.PointerParam,
+                      pointerClass='Sequence', allowsNull=True,
+                      label="Input sequence: ", condition='inputOrigin==0',
+                      help='Select the sequence object to add to the set')
+
+        form.addParam('inputAtomStruct', params.PointerParam,
+                      pointerClass='AtomStruct', allowsNull=True,
+                      label="Input structure: ", condition='inputOrigin==1',
+                      help='Select the AtomStruct object whose sequence to add to the set')
+
+        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin in [0,1]',
+                      label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
+                      help='Input entity type to add to the set')
+
+        form.addParam('inpChain', params.StringParam,
+                      label='Input chain: ', condition='inputOrigin == 1',
+                      help='Specify the protein chain to use as sequence.')
+
+        form.addParam('inpPositions', params.StringParam,
+                      label='Input positions: ', condition='inputOrigin in [0,1]',
+                      help='Specify the positions of the sequence to add in the output.')
+
+        form.addParam('addInput', params.LabelParam,
+                      label='Add input: ', condition='inputOrigin in [0,1]',
+                      help='Add sequence to the output set')
+
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         Params:
             form: this is the form to be populated with sections and params.
         """
         form.addSection(label='Input')
+        form.addParam('inputOrigin', params.EnumParam, default=0,
+                      label='Input origin: ', choices=['Sequence', 'AtomStruct', 'File'],
+                      help='Input origin to add to the set')
+        self._addInputForm(form)
 
-        form.addParam('file', params.FileParam,
+        form.addParam('inputList', params.TextParam, width=100, condition='inputOrigin in [0,1]',
+                      default='', label='List of inputs: ',
+                      help='The list of input to use for the final output set.')
+
+        form.addParam('file', params.FileParam, condition='inputOrigin == 2',
                       label='Sequence file: ',
                       help='Select the results folder downloaded from the AlphaFold3 server.')
+
 
         form = form.addGroup('Parameters')
         form.addParam('msa', params.BooleanParam, default=True,
@@ -70,12 +107,56 @@ class ProtChai(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
+        if (self.inputOrigin.get() != 2):
+            self._insertFunctionStep(self.createInputFileStep)
         self._insertFunctionStep(self.runChaiStep)
         self._insertFunctionStep(self.extractScoreStep)
         self._insertFunctionStep(self.createOutputStep)
 
+    def createInputFileStep(self):
+        path = os.path.abspath(self._getPath())
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        fastaPath = os.path.join(path, "input.fasta")
+        with open(fastaPath, 'w') as f:
+            counter = 1
+            for line in self.inputList.get().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    if ')' in line:
+                        json_part = line.split(')', 1)[1].strip()
+                    else:
+                        json_part = line
+                    inpDict = json.loads(json_part)
+                except json.JSONDecodeError:
+                    continue
+
+                base_name = inpDict.get("name", "unknown")
+                seqFile = inpDict.get("seqFile")
+                entity = inpDict.get("entity", "protein").lower()
+
+                sequence = ""
+                with open(seqFile) as sf:
+                    for l in sf:
+                        if l.startswith(">"):
+                            continue
+                        sequence += l.strip()
+
+                unique_name = f"{base_name}_{counter}"
+                counter += 1
+                f.write(f">{entity}|name={unique_name}\n")
+                print(f'----sequence: {sequence} : sequenceFile: {seqFile}')
+                f.write(f"{sequence}\n")
+
     def runChaiStep(self):
-        filePath = os.path.abspath(self.file.get())
+        if (self.inputOrigin.get() == 2):
+            filePath = os.path.abspath(self.file.get())
+        else:
+            filePath = os.path.abspath(self._getPath('input.fasta'))
         args = [str(filePath)]
 
         args.append(os.path.join(os.path.abspath(self._getPath()), "chai_results"))

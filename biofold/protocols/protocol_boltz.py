@@ -25,7 +25,6 @@
 # **************************************************************************
 import json
 import string
-import zipfile
 
 import os
 import pyworkflow.protocol.params as params
@@ -168,12 +167,6 @@ class ProtBoltz(EMProtocol):
                 body["sequence"] = e.sequence
                 if e.msa:
                     body["msa"] = e.msa
-            #todo ligand when all normal options work
-            elif e.entity_type == "ligand":
-                if e.smiles:
-                    body["smiles"] = e.smiles
-                elif e.ccd:
-                    body["ccd"] = e.ccd
 
             sequences.append({e.entity_type: body})
 

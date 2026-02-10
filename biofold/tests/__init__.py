@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
+# * Authors:   Blanca Pueche (blanca.pueche@cnb.csis.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,5 +25,5 @@
 # **************************************************************************
 
 
-from fpocket.tests.test_fpocket import *
+from biofold.tests.test_biofold import *
 

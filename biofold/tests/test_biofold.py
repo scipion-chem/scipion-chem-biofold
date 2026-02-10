@@ -23,12 +23,43 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+from biofold.protocols import ProtChai, ProtBoltz
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
-from ..protocols import FpocketFindPockets
 
-class TestFPocket(BaseTest):
+
+defSetASChain, defSetPDBChain = 'A', 'B'
+defSetPDBFile = 'Tmp/5ni1_{}_FIRST-LAST.fa'.format(defSetPDBChain)
+
+names = ['5ni1']
+defSetChains = [None, defSetASChain, defSetPDBChain]
+defSetFiles = [defSetPDBFile]
+
+defSetSeqs = '''1) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile": "%s"}''' % \
+                         (names[0], defSetPDBChain, defSetPDBFile)
+
+
+class TestChai(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
+        setupTestProject(cls)
+
+    def _runChai(self):
+        protChai = self.newProtocol(
+            ProtChai,
+            file=self.ds.getFile('Sequences/Several_sequences.fasta'))
+
+        self.launchProtocol(protChai)
+        best = getattr(protChai, 'outputBestAtomStruct', None)
+        self.assertIsNotNone(best)
+        all = getattr(protChai, 'outputSetOfAtomStruct', None)
+        self.assertIsNotNone(all)
+
+    def test(self):
+        self._runChai()
+
+class TestBoltz(BaseTest):
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
@@ -41,22 +72,22 @@ class TestFPocket(BaseTest):
         protImportPDB = cls.newProtocol(
             ProtImportPdb,
             inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
+            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.cif'))
         cls.launchProtocol(protImportPDB)
         cls.protImportPDB = protImportPDB
 
-    def _runFPocketFind(self):
-        protFPocket = self.newProtocol(
-            FpocketFindPockets,
-            inputAtomStruct=self.protImportPDB.outputPdb)
+    def _runBoltz(self):
+        protBoltz = self.newProtocol(
+            ProtBoltz,
+            inputOrigin=1,
+            inputList=defSetSeqs)
 
-        self.launchProtocol(protFPocket)
-        pdbOut = getattr(protFPocket, 'outputStructROIs', None)
-        self.assertIsNotNone(pdbOut)
+        self.launchProtocol(protBoltz)
+        best = getattr(protBoltz, 'outputAtomStruct', None)
+        self.assertIsNotNone(best)
 
-    def testFpocket(self):
-        self._runFPocketFind()
-
+    def test(self):
+        self._runBoltz()
 
 
 
