@@ -50,7 +50,9 @@ class TestChai(BaseTest):
     def _runChai(self):
         protChai = self.newProtocol(
             ProtChai,
-            file=self.ds.getFile('Sequences/Several_sequences.fasta'))
+            inputOrigin=2,
+            file=self.ds.getFile('Sequences/3lqd_B_mutated.fasta')
+        )
 
         self.launchProtocol(protChai)
         best = getattr(protChai, 'outputBestAtomStruct', None)
