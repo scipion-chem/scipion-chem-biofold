@@ -57,7 +57,7 @@ class TestChai(BaseTest):
         self.launchProtocol(protChai)
         best = getattr(protChai, 'outputBestAtomStruct', None)
         self.assertIsNotNone(best)
-        all = getattr(protChai, 'outputSetOfAtomStruct', None)
+        all = getattr(protChai, 'outputSetOfAtomStructs', None)
         self.assertIsNotNone(all)
 
     def test(self):
