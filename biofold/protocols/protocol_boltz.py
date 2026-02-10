@@ -58,7 +58,7 @@ class ProtBoltz(EMProtocol):
                       label="Input structure: ", condition='inputOrigin==1',
                       help='Select the AtomStruct object whose sequence to add to the set')
 
-        form.addParam('entityType', params.EnumParam, default=0,
+        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin != 2',
                       label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
                       help='Input entity type to add to the set')
 
@@ -66,7 +66,7 @@ class ProtBoltz(EMProtocol):
                       label='Input chain: ', condition='inputOrigin == 1',
                       help='Specify the protein chain to use as sequence.')
 
-        form.addParam('inpPositions', params.StringParam,
+        form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 2',
                       label='Input positions: ',
                       help='Specify the positions of the sequence to add in the output.')
 
@@ -74,7 +74,7 @@ class ProtBoltz(EMProtocol):
                       label="Cyclic: ",
                       help='Choose whether the input is cyclic or not.')
 
-        form.addParam('addInput', params.LabelParam,
+        form.addParam('addInput', params.LabelParam, condition='inputOrigin != 2',
                       label='Add input: ',
                       help='Add sequence to the output set')
 
@@ -85,13 +85,17 @@ class ProtBoltz(EMProtocol):
         """
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                       label='Input origin: ', choices=['Sequence', 'AtomStruct'],
+                       label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
                        help='Input origin to add to the set')
         self._addInputForm(form)
 
-        form.addParam('inputList', params.TextParam, width=100,
-                       default='', label='List of inputs: ',
-                       help='The list of input to use for the final output set.')
+        form.addParam('inputList', params.TextParam, width=100, condition='inputOrigin in [0,1]',
+                      default='', label='List of inputs: ',
+                      help='The list of input to use for the final output set.')
+
+        form.addParam('file', params.FileParam, condition='inputOrigin == 2',
+                      label='Sequence file: ',
+                      help='Select the results fasta file.')
 
         form = form.addGroup('Parameters')
         form.addParam('infPot', params.BooleanParam, default=False,
@@ -113,9 +117,51 @@ class ProtBoltz(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.createInputFileStep)
+        if self.inputOrigin.get() == 2:
+            self._insertFunctionStep(self.createJsonFromFasta)
+        else:
+            self._insertFunctionStep(self.createInputFileStep)
+        self._insertFunctionStep(self.createYamlFile)
         self._insertFunctionStep(self.runBoltzStep)
         self._insertFunctionStep(self.createOutputStep)
+
+    def createYamlFile(self):
+        jsonPath = os.path.abspath(self._getPath("input.json"))
+        yaml_path = os.path.abspath(self._getPath("input.yaml"))
+
+        script_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "buildYaml.py")
+
+        Plugin.runCondaCommand(
+            self,
+            program="python",
+            args=f"{script_path} {jsonPath} {yaml_path}",
+            condaDic=BOLTZ_DIC
+        )
+
+    def createJsonFromFasta(self):
+        fastaPath = os.path.abspath(self.file.get())
+        seqDic = parseFasta(fastaPath)
+
+        chain_id_iter = iter(string.ascii_uppercase)
+        entities = []
+
+        for seq_name, sequence in seqDic.items():
+            chain_id = next(chain_id_iter)
+            entity = self.guessEntityType(sequence)
+            cyclic = self.cyclic.get()
+
+            entity_dict = {
+                "id": chain_id,
+                "cyclic": cyclic,
+                "sequence": sequence
+            }
+
+            entities.append({entity: entity_dict})
+
+        jsonPath = os.path.abspath(self._getPath("input.json"))
+        with open(jsonPath, 'w') as f:
+            json.dump({"sequences": entities}, f, indent=2)
+
 
     def createInputFileStep(self):
         entities = []
@@ -170,20 +216,11 @@ class ProtBoltz(EMProtocol):
 
             sequences.append({e.entity_type: body})
 
-        json_path = os.path.abspath(self._getPath("input.json"))
-        yaml_path = os.path.abspath(self._getPath("input.yaml"))
+        jsonPath = os.path.abspath(self._getPath("input.json"))
 
-        with open(json_path, "w") as f:
+        with open(jsonPath, "w") as f:
             json.dump({"sequences": sequences}, f, indent=2)
 
-        script_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "buildYaml.py")
-
-        Plugin.runCondaCommand(
-            self,
-            program="python",
-            args=f"{script_path} {json_path} {yaml_path}",
-            condaDic=BOLTZ_DIC
-        )
 
 
     def runBoltzStep(self):
@@ -252,5 +289,23 @@ class ProtBoltz(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def guessEntityType(self, sequence):
+        seq = sequence.upper()
+        dna_letters = set("ACGT")
+        rna_letters = set("ACGU")
+        protein_letters = set("ACDEFGHIKLMNPQRSTVWY")
 
+        seq_set = set(seq)
+
+        # check for RNA (U present, T absent)
+        if "U" in seq_set and "T" not in seq_set:
+            return "rna"
+        # check for DNA (T present, U absent)
+        elif "T" in seq_set and "U" not in seq_set and seq_set <= dna_letters:
+            return "dna"
+        # check for protein: contains amino acid letters not in DNA/RNA
+        elif seq_set <= protein_letters:
+            return "protein"
+        else:
+            return "protein"
 

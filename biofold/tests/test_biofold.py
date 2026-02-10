@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 from biofold.protocols import ProtChai, ProtBoltz
+from pwem.convert import AtomicStructHandler
+from pwem.objects import AtomStruct, Sequence
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 
@@ -65,22 +67,16 @@ class TestBoltz(BaseTest):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
 
         setupTestProject(cls)
-        cls._runImportPDB()
-
-    @classmethod
-    def _runImportPDB(cls):
-        protImportPDB = cls.newProtocol(
-            ProtImportPdb,
-            inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.cif'))
-        cls.launchProtocol(protImportPDB)
-        cls.protImportPDB = protImportPDB
 
     def _runBoltz(self):
         protBoltz = self.newProtocol(
             ProtBoltz,
-            inputOrigin=1,
-            inputList=defSetSeqs)
+            inputOrigin=2,
+            entityType=1,
+            recyclingSteps=1,
+            samplingSteps=50,
+            file=self.ds.getFile('Sequences/3lqd_B_mutated.fasta')
+        )
 
         self.launchProtocol(protBoltz)
         best = getattr(protBoltz, 'outputAtomStruct', None)

@@ -79,7 +79,7 @@ class ProtChai(EMProtocol):
         """
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                      label='Input origin: ', choices=['Sequence', 'AtomStruct', 'File'],
+                      label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
                       help='Input origin to add to the set')
         self._addInputForm(form)
 
@@ -89,7 +89,7 @@ class ProtChai(EMProtocol):
 
         form.addParam('file', params.FileParam, condition='inputOrigin == 2',
                       label='Sequence file: ',
-                      help='Select the results folder downloaded from the AlphaFold3 server.')
+                      help='Select the fasta file. The format of the fasta file can be seen in https://github.com/chaidiscovery/chai-lab/tree/main.')
 
 
         form = form.addGroup('Parameters')
@@ -149,7 +149,6 @@ class ProtChai(EMProtocol):
                 unique_name = f"{base_name}_{counter}"
                 counter += 1
                 f.write(f">{entity}|name={unique_name}\n")
-                print(f'----sequence: {sequence} : sequenceFile: {seqFile}')
                 f.write(f"{sequence}\n")
 
     def runChaiStep(self):
