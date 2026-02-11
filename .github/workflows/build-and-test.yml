@@ -43,4 +43,4 @@ jobs:
           TEST_MODULE: ${{ vars.FOLDER_WITH_VERSION }}
         run: |
           pip install --user scipion-testrunner
-          scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
+          scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 biofold --noGpu
