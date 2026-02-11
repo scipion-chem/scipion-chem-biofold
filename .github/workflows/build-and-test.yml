@@ -22,18 +22,18 @@ jobs:
         with:
           path: ${{ github.workspace }}/../
           repo_url: https://github.com/scipion-chem/scipion-chem
-          prioritized_branches: "${{ github.head_ref }},${{ github.base_ref }}"
+          prioritized_branches: "${{ github.head_ref || github.ref_name }},${{ github.base_ref || 'main' }}"
 
       - name: Install scipion-chem
         working-directory: ${{ github.workspace }}/../
         run: scipion/scipion3 installp -p scipion-chem/ --devel
 
       - name: Checkout repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref || github.ref_name }}
 
-      - name: Install plugin from pull request
+      - name: Install plugin
         working-directory: ${{ github.workspace }}
         run: ../scipion/scipion3 installp -p . --devel
 
@@ -44,8 +44,3 @@ jobs:
         run: |
           pip install --user scipion-testrunner
           scipion_testrunner ./scipion/scipion3 $TEST_MODULE --noGpu --testData=${{ github.workspace }}/$TEST_MODULE/testData.json
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
