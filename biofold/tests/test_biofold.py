@@ -38,7 +38,7 @@ defSetSeqs = '''1) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile
                          (names[0], defSetPDBChain, defSetPDBFile)
 
 
-class TestChai(BaseTest):
+class TestBiofold(BaseTest):
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
@@ -57,16 +57,6 @@ class TestChai(BaseTest):
         all = getattr(protChai, 'outputSetOfAtomStructs', None)
         self.assertIsNotNone(all)
 
-    def test(self):
-        self._runChai()
-
-class TestBoltz(BaseTest):
-    @classmethod
-    def setUpClass(cls):
-        cls.ds = DataSet.getDataSet('model_building_tutorial')
-
-        setupTestProject(cls)
-
     def _runBoltz(self):
         protBoltz = self.newProtocol(
             ProtBoltz,
@@ -76,12 +66,13 @@ class TestBoltz(BaseTest):
             samplingSteps=50,
             file=self.ds.getFile('Sequences/3lqd_B_mutated.fasta')
         )
-
         self.launchProtocol(protBoltz)
         best = getattr(protBoltz, 'outputAtomStruct', None)
         self.assertIsNotNone(best)
 
+
     def test(self):
+        self._runChai()
         self._runBoltz()
 
 
