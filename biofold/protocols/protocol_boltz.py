@@ -83,6 +83,15 @@ class ProtBoltz(EMProtocol):
         Params:
             form: this is the form to be populated with sections and params.
         """
+        form.addHidden('useGpu', params.BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation. Choose one.")
+
+        form.addHidden('gpuList', params.StringParam, default='0',
+                       label="Choose GPU IDs",
+                       help="Comma-separated GPU devices that can be used.")
+
+
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
                        label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
@@ -97,35 +106,37 @@ class ProtBoltz(EMProtocol):
                       label='Sequence file: ',
                       help='Select the results fasta file.')
 
-        form = form.addGroup('Parameters')
-        form.addParam('infPot', params.BooleanParam, default=False,
+        group = form.addGroup('Parameters')
+        group.addParam('infPot', params.BooleanParam, default=False,
                         label="Inference potentials: ",
                         help='Choose whether to use inference potentials to improve physical plausibility of the predicted poses.')
-        form.addParam('recyclingSteps', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('recyclingSteps', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
                         label='Recycling steps: ', help="Number of recycling steps for prediction.")
-        form.addParam('samplingSteps', params.IntParam, default=200,
+        group.addParam('samplingSteps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
-        form.addParam('diffusionSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('diffusionSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
                         label='Diffusion samples: ', help="Number of diffusion samples for prediction.")
-        form.addParam('stepScale', params.FloatParam, default=1.638,
+        group.addParam('stepScale', params.FloatParam, default=1.638,
                         label='Steps size: ', help="Number of step size. Its related to the temperature at which the diffusion process samples the distribution.")
-        form.addParam('affinityMWcorr', params.BooleanParam, default=False,
+        group.addParam('affinityMWcorr', params.BooleanParam, default=False,
                        label="Molecular weight correction: ",
                        help='Choose whether to add the molecular weight correction to the affinity prediction.')
-        form.addParam('diffusionSamplesAff', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('diffusionSamplesAff', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
                        label='Diffusion samples for affinity: ', help="Number of diffusion samples for affinity.")
+
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         if self.inputOrigin.get() == 2:
-            self._insertFunctionStep(self.createJsonFromFasta)
+            self._insertFunctionStep(self.createJsonFromFastaStep)
         else:
             self._insertFunctionStep(self.createInputFileStep)
-        self._insertFunctionStep(self.createYamlFile)
+        self._insertFunctionStep(self.createYamlFileStep)
         self._insertFunctionStep(self.runBoltzStep)
         self._insertFunctionStep(self.createOutputStep)
 
-    def createYamlFile(self):
+    def createYamlFileStep(self):
         jsonPath = os.path.abspath(self._getPath("input.json"))
         yaml_path = os.path.abspath(self._getPath("input.yaml"))
 
@@ -138,7 +149,7 @@ class ProtBoltz(EMProtocol):
             condaDic=BOLTZ_DIC
         )
 
-    def createJsonFromFasta(self):
+    def createJsonFromFastaStep(self):
         fastaPath = os.path.abspath(self.file.get())
         seqDic = parseFasta(fastaPath)
 
@@ -241,6 +252,14 @@ class ProtBoltz(EMProtocol):
 
         args.append(f" --diffusion_samples_affinity {self.diffusionSamplesAff.get()}")
         args.append(f" --out_dir {os.path.abspath(self._getPath())}")
+
+        if self.useGpu.get():
+            gpu_ids = self.gpuList.get()
+            selected_gpu = gpu_ids.split(",")[0]
+            os.environ["CUDA_VISIBLE_DEVICES"] = selected_gpu
+            args.append("--accelerator gpu")
+        else:
+            args.append("--accelerator cpu")
 
         Plugin.runCondaCommand(
             self,

@@ -42,6 +42,8 @@ class ProtImportPredictions(EMProtocol):
     Protocol to import predicted structures.
     AlphaFold3 server: https://alphafoldserver.com/
     Protenix server: https://protenix-server.com/
+    Chai server: https://lab.chaidiscovery.com/
+    Boltz server: https://app.tamarind.bio/boltz/
     """
     _label = 'Import structure predictions'
 
@@ -50,12 +52,12 @@ class ProtImportPredictions(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
 
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                      label='Input origin: ', choices=['AlphaFold3', 'Protenix'],
+                      label='Input origin: ', choices=['AlphaFold3', 'Protenix', 'Chai', 'Boltz'],
                       help='Input entity type to add to the set')
 
         form.addParam('folder', params.FileParam,
-                      label='AlphaFold3 server results: ',
-                      help='Select the results folder downloaded from the AlphaFold3 server.')
+                      label='Results: ',
+                      help='Select the results folder downloaded from the server.')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -84,17 +86,15 @@ class ProtImportPredictions(EMProtocol):
         else:
             raise Exception("Unsupported file format. Please provide .zip or .tar.gz/.tgz archive.")
 
-        originIsProtenix = (self.inputOrigin.get() == 1)
 
-        if originIsProtenix:
+        if self.inputOrigin.get() == 1: #protenix
             for root, dirs, files in os.walk(extraPath):
                 if os.path.basename(root).lower() == "predictions":
                     for name in files:
                         if name.lower().endswith(".cif"):
                             rel = os.path.relpath(os.path.join(root, name), extraPath)
                             self.extraFiles.append(rel)
-
-        else:
+        elif self.inputOrigin.get() == 0: #af3
             for root, dirs, files in os.walk(extraPath):
                 if "templates" in root.lower().split(os.sep):
                     continue
@@ -102,50 +102,79 @@ class ProtImportPredictions(EMProtocol):
                     if name.lower().endswith(".cif"):
                         rel = os.path.relpath(os.path.join(root, name), extraPath)
                         self.extraFiles.append(rel)
+        elif self.inputOrigin.get() == 3: #boltz
+            for root, dirs, files in os.walk(extraPath):
+                if os.path.basename(root).lower() == "result":
+                    for name in files:
+                        if name.lower().endswith(".pdb"):
+                            rel = os.path.relpath(os.path.join(root, name), extraPath)
+                            self.extraFiles.append(rel)
 
         if not self.extraFiles:
-            raise Exception("No CIF files found in the selected folder.")
+            raise Exception("No CIF/PDB files found in the selected folder.")
 
     def extractPlddtStep(self):
-        """Extract per-residue pLDDT and compute mean pLDDT per model"""
+        """Extract per-residue pLDDT and compute mean pLDDT per model (supports CIF and PDB)."""
         extraPath = self._getExtraPath()
         self.meanPlddt = {}
 
-        for cifName in self.extraFiles:
-            cifPath = os.path.join(extraPath, cifName)
-            modelName = os.path.splitext(cifName)[0]
-
-            headers = []
+        for fileName in self.extraFiles:
+            filePath = os.path.join(extraPath, fileName)
+            modelName = os.path.splitext(fileName)[0]
             plddtValues = []
-            seenResidues = set()
 
-            with open(cifPath) as f:
-                for line in f:
-                    if line.startswith('_atom_site.'):
-                        headers.append(line.strip())
-                    elif line.startswith('ATOM'):
-                        break
-
-            colIndex = {h.split('.')[-1]: i for i, h in enumerate(headers)}
-
-            if 'B_iso_or_equiv' not in colIndex:
-                raise Exception(f"No pLDDT field in {cifName}")
-
-            with open(cifPath) as f:
-                for line in f:
-                    if not line.startswith('ATOM'):
-                        continue
-                    cols = re.sub(r'\s+', ' ', line.strip()).split()
-                    resnum = int(cols[colIndex['auth_seq_id']])
-                    plddt = float(cols[colIndex['B_iso_or_equiv']])
-                    if resnum not in seenResidues:
+            if fileName.lower().endswith(".cif"):
+                headers = []
+                seenResidues = set()
+                with open(filePath) as f:
+                    for line in f:
+                        if line.startswith('_atom_site.'):
+                            headers.append(line.strip())
+                        elif line.startswith('ATOM'):
+                            break
+                colIndex = {h.split('.')[-1]: i for i, h in enumerate(headers)}
+                if 'B_iso_or_equiv' not in colIndex:
+                    raise Exception(f"No pLDDT field in {fileName}")
+                with open(filePath) as f:
+                    for line in f:
+                        if not line.startswith('ATOM'):
+                            continue
+                        cols = re.sub(r'\s+', ' ', line.strip()).split()
+                        resnum = int(cols[colIndex['auth_seq_id']])
+                        if resnum in seenResidues:
+                            continue
                         seenResidues.add(resnum)
+                        plddt = float(cols[colIndex['B_iso_or_equiv']])
                         plddtValues.append(plddt)
+
+            elif fileName.lower().endswith(".pdb"):
+                seenResidues = set()
+                with open(filePath) as f:
+                    for line in f:
+                        if not line.startswith("ATOM"):
+                            continue
+                        cols = re.sub(r'\s+', ' ', line[0:66].strip()).split()
+                        try:
+                            resnum = int(line[22:26].strip())
+                            bfactor = float(line[60:66].strip())
+                        except ValueError:
+                            continue
+                        if resnum in seenResidues:
+                            continue
+                        seenResidues.add(resnum)
+                        plddtValues.append(bfactor)
+
+            else:
+                raise Exception(f"Unsupported file type for pLDDT extraction: {fileName}")
+
+            if not plddtValues:
+                raise Exception(f"No pLDDT values found in {fileName}")
 
             self.meanPlddt[modelName] = sum(plddtValues) / len(plddtValues)
 
         self.bestModel = max(self.meanPlddt, key=self.meanPlddt.get)
 
+        # Write results to file
         resultsFile = self._getPath('results.txt')
         with open(resultsFile, 'w') as f:
             for model, plddt in self.meanPlddt.items():
@@ -163,8 +192,12 @@ class ProtImportPredictions(EMProtocol):
 
         if self.inputOrigin.get() == 0:
             origin = 'AlphaFold3'
-        else:
+        elif self.inputOrigin.get() == 1:
             origin = 'Protenix'
+        elif self.inputOrigin.get() == 2:
+            origin = 'Chai'
+        else:
+            origin = 'Boltz'
 
         for cifName in self.extraFiles:
             src = os.path.join(extraPath, cifName)
@@ -179,7 +212,9 @@ class ProtImportPredictions(EMProtocol):
             atomStruct.setAttributeValue('origin', origin)
             outputSet.append(atomStruct)
 
-        bestSrc = os.path.join(extraPath, self.bestModel + '.cif')
+        if origin != 'Boltz': bestSrc = os.path.join(extraPath, self.bestModel + '.cif')
+        else: bestSrc = os.path.join(extraPath, self.bestModel + '.pdb')
+
         bestStruct = AtomStruct(filename=bestSrc)
         bestStruct.origin = String()
         bestStruct.setAttributeValue('origin', origin)
