@@ -5,7 +5,7 @@ Biofold plugin
 **Documentation under development, sorry for the inconvenience**
 
 This is a **Scipion** plugin that offers tools from the
-`AlphaFold3 <https://github.com/google-deepmind/alphafold3>`_, `Boltz <https://github.com/jwohlwend/boltz>`_, and `Chai <https://github.com/chaidiscovery/chai-lab>`_.
+`Boltz <https://github.com/jwohlwend/boltz>`_, and `Chai <https://github.com/chaidiscovery/chai-lab>`_, as well as imports for `AlphaFold3 <https://github.com/google-deepmind/alphafold3>`_, Protenix <https://github.com/bytedance/Protenix>`, Boltz and Chai server results.
 These tools will make it possible to carry out different functions to fold proteins.
 
 
