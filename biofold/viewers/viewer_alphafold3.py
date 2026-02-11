@@ -4,13 +4,13 @@ from pwem.objects import SetOfAtomStructs, AtomStruct
 from pwem.viewers import Chimera
 from pyworkflow.viewer import Viewer
 
-from biofold.protocols import ProtAlphaFold3
+from biofold.protocols import ProtImportPredictions
 
 
 class ProtAlphaFold3Viewer(Viewer):
     """ Viewer for ChimeraProtAlphaFold3 protocol output. """
     _label = 'viewer discrepancies'
-    _targets = [AtomStruct]
+    _targets = [ProtImportPredictions]
 
     def visualize(self, obj, **args):
         # Create Chimera command file

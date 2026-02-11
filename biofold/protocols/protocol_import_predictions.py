@@ -23,27 +23,35 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import tarfile
 import zipfile
 
 import os
 import re
 import shutil
 import pyworkflow.protocol.params as params
+from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 
 from pwem.objects import AtomStruct, SetOfAtomStructs
 
 
-class ProtAlphaFold3(EMProtocol):
+class ProtImportPredictions(EMProtocol):
     """
-    Protocol to import AlphaFold3 predicted structures.
+    Protocol to import predicted structures.
+    AlphaFold3 server: https://alphafoldserver.com/
+    Protenix server: https://protenix-server.com/
     """
-    _label = 'alphafold3 import'
+    _label = 'Import structure predictions'
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
+
+        form.addParam('inputOrigin', params.EnumParam, default=0,
+                      label='Input origin: ', choices=['AlphaFold3', 'Protenix'],
+                      help='Input entity type to add to the set')
 
         form.addParam('folder', params.FileParam,
                       label='AlphaFold3 server results: ',
@@ -63,12 +71,37 @@ class ProtAlphaFold3(EMProtocol):
         extraPath = self._getExtraPath()
         os.makedirs(extraPath, exist_ok=True)
 
-        with zipfile.ZipFile(filePath, 'r') as zip_ref:
-            zip_ref.extractall(extraPath)
+        lower = filePath.lower()
 
-        for name in sorted(os.listdir(extraPath)):
-            if name.lower().endswith('.cif'):
-                self.extraFiles.append(name)
+        if lower.endswith(".zip"):
+            with zipfile.ZipFile(filePath, 'r') as zip_ref:
+                zip_ref.extractall(extraPath)
+
+        elif lower.endswith(".tar.gz") or lower.endswith(".tgz") or lower.endswith(".tar"):
+            with tarfile.open(filePath, 'r:*') as tar_ref:
+                tar_ref.extractall(extraPath)
+
+        else:
+            raise Exception("Unsupported file format. Please provide .zip or .tar.gz/.tgz archive.")
+
+        originIsProtenix = (self.inputOrigin.get() == 1)
+
+        if originIsProtenix:
+            for root, dirs, files in os.walk(extraPath):
+                if os.path.basename(root).lower() == "predictions":
+                    for name in files:
+                        if name.lower().endswith(".cif"):
+                            rel = os.path.relpath(os.path.join(root, name), extraPath)
+                            self.extraFiles.append(rel)
+
+        else:
+            for root, dirs, files in os.walk(extraPath):
+                if "templates" in root.lower().split(os.sep):
+                    continue
+                for name in files:
+                    if name.lower().endswith(".cif"):
+                        rel = os.path.relpath(os.path.join(root, name), extraPath)
+                        self.extraFiles.append(rel)
 
         if not self.extraFiles:
             raise Exception("No CIF files found in the selected folder.")
@@ -128,16 +161,28 @@ class ProtAlphaFold3(EMProtocol):
 
         outputSet = SetOfAtomStructs.create(self._getPath())
 
+        if self.inputOrigin.get() == 0:
+            origin = 'AlphaFold3'
+        else:
+            origin = 'Protenix'
+
         for cifName in self.extraFiles:
             src = os.path.join(extraPath, cifName)
-            dst = os.path.join(outPath, cifName)
+
+            base = os.path.basename(cifName)
+            dst = os.path.join(outPath, base)
+
             shutil.copy(src, dst)
 
             atomStruct = AtomStruct(filename=dst)
+            atomStruct.origin = String()
+            atomStruct.setAttributeValue('origin', origin)
             outputSet.append(atomStruct)
 
         bestSrc = os.path.join(extraPath, self.bestModel + '.cif')
         bestStruct = AtomStruct(filename=bestSrc)
+        bestStruct.origin = String()
+        bestStruct.setAttributeValue('origin', origin)
 
         self._defineOutputs(
             outputBestAtomStruct=bestStruct,

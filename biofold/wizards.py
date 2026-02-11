@@ -123,12 +123,6 @@ class AddSequenceWizardBoltz(SelectResidueWizard):
                   (lenPrev, outStr[0], chainStr, outStr[1], seqFile, entity, cyclic)
         form.setVar(outputParam[0], prevStr + jsonStr)
 
-        if addPointer:
-            outPointers = outputParam[1]
-            prevPointers = getattr(protocol, outPointers)
-            prevPointers.append(Pointer(inputObj))
-            form.setVar(outPointers, prevPointers)
-
 
 AddSequenceWizardBoltz().addTarget(protocol=ProtBoltz,
                               targets=['addInput'],
@@ -199,12 +193,6 @@ class AddSequenceWizardChai(SelectResidueWizard):
         jsonStr = '%s) {"name": "%s"%s, "index": "%s", "seqFile": "%s", "entity": "%s"}\n' % \
                   (lenPrev, outStr[0], chainStr, outStr[1], seqFile, entity)
         form.setVar(outputParam[0], prevStr + jsonStr)
-
-        if addPointer:
-            outPointers = outputParam[1]
-            prevPointers = getattr(protocol, outPointers)
-            prevPointers.append(Pointer(inputObj))
-            form.setVar(outPointers, prevPointers)
 
 
 AddSequenceWizardChai().addTarget(protocol=ProtChai,
