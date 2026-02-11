@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# * Authors:   Blanca Pueche (blanca.pueche@cnb.csis.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,10 +24,7 @@
 # *
 # **************************************************************************
 from biofold.protocols import ProtChai, ProtBoltz
-from pwem.convert import AtomicStructHandler
-from pwem.objects import AtomStruct, Sequence
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
-from pwem.protocols import ProtImportPdb
 
 
 defSetASChain, defSetPDBChain = 'A', 'B'

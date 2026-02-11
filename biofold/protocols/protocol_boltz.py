@@ -138,14 +138,14 @@ class ProtBoltz(EMProtocol):
 
     def createYamlFileStep(self):
         jsonPath = os.path.abspath(self._getPath("input.json"))
-        yaml_path = os.path.abspath(self._getPath("input.yaml"))
+        yamlPath = os.path.abspath(self._getPath("input.yaml"))
 
-        script_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "buildYaml.py")
+        scriptPath = os.path.join(os.path.dirname(__file__), "..", "scripts", "buildYaml.py")
 
         Plugin.runCondaCommand(
             self,
             program="python",
-            args=f"{script_path} {jsonPath} {yaml_path}",
+            args=f"{scriptPath} {jsonPath} {yamlPath}",
             condaDic=BOLTZ_DIC
         )
 
@@ -153,21 +153,21 @@ class ProtBoltz(EMProtocol):
         fastaPath = os.path.abspath(self.file.get())
         seqDic = parseFasta(fastaPath)
 
-        chain_id_iter = iter(string.ascii_uppercase)
+        chainIdIiter = iter(string.ascii_uppercase)
         entities = []
 
-        for seq_name, sequence in seqDic.items():
-            chain_id = next(chain_id_iter)
+        for seqName, sequence in seqDic.items():
+            chainId = next(chainIdIiter)
             entity = self.guessEntityType(sequence)
             cyclic = self.cyclic.get()
 
-            entity_dict = {
-                "id": chain_id,
+            entityDict = {
+                "id": chainId,
                 "cyclic": cyclic,
                 "sequence": sequence
             }
 
-            entities.append({entity: entity_dict})
+            entities.append({entity: entityDict})
 
         jsonPath = os.path.abspath(self._getPath("input.json"))
         with open(jsonPath, 'w') as f:
@@ -176,7 +176,7 @@ class ProtBoltz(EMProtocol):
 
     def createInputFileStep(self):
         entities = []
-        chain_id_iter = iter(string.ascii_uppercase)
+        chainIdIiter = iter(string.ascii_uppercase)
 
         for inputLine in self.inputList.get().split('\n'):
             if not inputLine.strip():
@@ -188,11 +188,11 @@ class ProtBoltz(EMProtocol):
             entity = inpJson.get('entity', 'protein')
             cyclic = inpJson.get('cyclic', False)
 
-            chain_id = next(chain_id_iter)
+            chainId = next(chainIdIiter)
 
             entity = BoltzEntity(
                 entity_type=entity,
-                chain_id=chain_id,
+                chainId=chainId,
                 sequence=sequence,
                 cyclic=cyclic
             )
@@ -310,20 +310,20 @@ class ProtBoltz(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def guessEntityType(self, sequence):
         seq = sequence.upper()
-        dna_letters = set("ACGT")
-        rna_letters = set("ACGU")
-        protein_letters = set("ACDEFGHIKLMNPQRSTVWY")
+        dnaLetters = set("ACGT")
+        rnaLetters = set("ACGU")
+        proteinLetters = set("ACDEFGHIKLMNPQRSTVWY")
 
-        seq_set = set(seq)
+        seqSet = set(seq)
 
         # check for RNA (U present, T absent)
-        if "U" in seq_set and "T" not in seq_set:
+        if "U" in seqSet and "T" not in seqSet:
             return "rna"
         # check for DNA (T present, U absent)
-        elif "T" in seq_set and "U" not in seq_set and seq_set <= dna_letters:
+        elif "T" in seqSet and "U" not in seqSet and seqSet <= dnaLetters:
             return "dna"
         # check for protein: contains amino acid letters not in DNA/RNA
-        elif seq_set <= protein_letters:
+        elif seqSet <= proteinLetters:
             return "protein"
         else:
             return "protein"

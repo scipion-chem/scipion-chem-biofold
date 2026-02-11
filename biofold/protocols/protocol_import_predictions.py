@@ -45,7 +45,7 @@ class ProtImportPredictions(EMProtocol):
     Chai server: https://lab.chaidiscovery.com/
     Boltz server: https://app.tamarind.bio/boltz/
     """
-    _label = 'Import structure predictions'
+    _label = 'import structure predictions'
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -76,12 +76,12 @@ class ProtImportPredictions(EMProtocol):
         lower = filePath.lower()
 
         if lower.endswith(".zip"):
-            with zipfile.ZipFile(filePath, 'r') as zip_ref:
-                zip_ref.extractall(extraPath)
+            with zipfile.ZipFile(filePath, 'r') as zipRef:
+                zipRef.extractall(extraPath)
 
         elif lower.endswith(".tar.gz") or lower.endswith(".tgz") or lower.endswith(".tar"):
-            with tarfile.open(filePath, 'r:*') as tar_ref:
-                tar_ref.extractall(extraPath)
+            with tarfile.open(filePath, 'r:*') as tarRef:
+                tarRef.extractall(extraPath)
 
         else:
             raise Exception("Unsupported file format. Please provide .zip or .tar.gz/.tgz archive.")
@@ -94,14 +94,6 @@ class ProtImportPredictions(EMProtocol):
                         if name.lower().endswith(".cif"):
                             rel = os.path.relpath(os.path.join(root, name), extraPath)
                             self.extraFiles.append(rel)
-        elif self.inputOrigin.get() == 0: #af3
-            for root, dirs, files in os.walk(extraPath):
-                if "templates" in root.lower().split(os.sep):
-                    continue
-                for name in files:
-                    if name.lower().endswith(".cif"):
-                        rel = os.path.relpath(os.path.join(root, name), extraPath)
-                        self.extraFiles.append(rel)
         elif self.inputOrigin.get() == 3: #boltz
             for root, dirs, files in os.walk(extraPath):
                 if os.path.basename(root).lower() == "result":
@@ -109,6 +101,14 @@ class ProtImportPredictions(EMProtocol):
                         if name.lower().endswith(".pdb"):
                             rel = os.path.relpath(os.path.join(root, name), extraPath)
                             self.extraFiles.append(rel)
+        else: #af3 and chai
+            for root, dirs, files in os.walk(extraPath):
+                if "templates" in root.lower().split(os.sep):
+                    continue
+                for name in files:
+                    if name.lower().endswith(".cif"):
+                        rel = os.path.relpath(os.path.join(root, name), extraPath)
+                        self.extraFiles.append(rel)
 
         if not self.extraFiles:
             raise Exception("No CIF/PDB files found in the selected folder.")
@@ -212,8 +212,10 @@ class ProtImportPredictions(EMProtocol):
             atomStruct.setAttributeValue('origin', origin)
             outputSet.append(atomStruct)
 
-        if origin != 'Boltz': bestSrc = os.path.join(extraPath, self.bestModel + '.cif')
-        else: bestSrc = os.path.join(extraPath, self.bestModel + '.pdb')
+        if origin != 'Boltz':
+            bestSrc = os.path.join(extraPath, self.bestModel + '.cif')
+        else:
+            bestSrc = os.path.join(extraPath, self.bestModel + '.pdb')
 
         bestStruct = AtomStruct(filename=bestSrc)
         bestStruct.origin = String()

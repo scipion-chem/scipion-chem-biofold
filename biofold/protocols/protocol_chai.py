@@ -24,13 +24,10 @@
 # *
 # **************************************************************************
 import json
-import zipfile
 
 import os
 import re
-import shutil
 import pyworkflow.protocol.params as params
-from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from biofold.constants import CHAI_DIC
@@ -149,9 +146,9 @@ class ProtChai(EMProtocol):
                             continue
                         sequence += l.strip()
 
-                unique_name = f"{base_name}_{counter}"
+                uniqueName = f"{base_name}_{counter}"
                 counter += 1
-                f.write(f">{entity}|name={unique_name}\n")
+                f.write(f">{entity}|name={uniqueName}\n")
                 f.write(f"{sequence}\n")
 
     def runChaiStep(self):
@@ -303,20 +300,20 @@ class ProtChai(EMProtocol):
 
     def guessEntityType(self, sequence):
         seq = sequence.upper()
-        dna_letters = set("ACGT")
-        rna_letters = set("ACGU")
-        protein_letters = set("ACDEFGHIKLMNPQRSTVWY")
+        dnaLetters = set("ACGT")
+        rnaLetters = set("ACGU")
+        proteinLetters = set("ACDEFGHIKLMNPQRSTVWY")
 
-        seq_set = set(seq)
+        seqSet = set(seq)
 
         # check for RNA (U present, T absent)
-        if "U" in seq_set and "T" not in seq_set:
+        if "U" in seqSet and "T" not in seqSet:
             return "rna"
         # check for DNA (T present, U absent)
-        elif "T" in seq_set and "U" not in seq_set and seq_set <= dna_letters:
+        elif "T" in seqSet and "U" not in seqSet and seqSet <= dnaLetters:
             return "dna"
         # check for protein: contains amino acid letters not in DNA/RNA
-        elif seq_set <= protein_letters:
+        elif seqSet <= proteinLetters:
             return "protein"
         else:
             return "protein"
@@ -330,29 +327,29 @@ class ProtChai(EMProtocol):
 
         fixedLines = []
         counter = 1
-        sequence_buffer = ""
-        current_header = None
+        sequenceBuffer = ""
+        currentHeader = None
 
 
         for line in lines:
             line = line.rstrip("\n")
             if line.startswith(">"):
-                if current_header is not None:
-                    entity_type = self.guessEntityType(sequence_buffer)
-                    self.writeSequence(entity_type, current_header, sequence_buffer, counter, fixedLines)
+                if currentHeader is not None:
+                    entityType = self.guessEntityType(sequenceBuffer)
+                    self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
                     counter += 1
 
                 header = line[1:]
                 if "|name=" in header:
                     header = header.split("|name=")[-1]
-                current_header = header
-                sequence_buffer = ""
+                currentHeader = header
+                sequenceBuffer = ""
             else:
-                sequence_buffer += line.strip()
+                sequenceBuffer += line.strip()
 
-        if current_header is not None:
-            entity_type = self.guessEntityType(sequence_buffer)
-            self.writeSequence(entity_type, current_header, sequence_buffer, counter, fixedLines)
+        if currentHeader is not None:
+            entityType = self.guessEntityType(sequenceBuffer)
+            self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
             counter += 1
 
         with open(outputPath, 'w') as f:
@@ -360,9 +357,9 @@ class ProtChai(EMProtocol):
 
         self.NEWFILE = True
 
-    def writeSequence(self, entity_type, header, sequence, counter, fixedLines):
+    def writeSequence(self, entityType, header, sequence, counter, fixedLines):
         if not header:
             header = f"seq{counter}"
-        fixedLines.append(f">{entity_type}|{header}\n")
+        fixedLines.append(f">{entityType}|{header}\n")
         for i in range(0, len(sequence), 80):
             fixedLines.append(sequence[i:i + 80] + "\n")
