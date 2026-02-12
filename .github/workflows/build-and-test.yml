@@ -38,9 +38,7 @@ jobs:
         run: ../scipion/scipion3 installp -p . --devel
 
       - name: Run tests
-        working-directory: ${{ github.workspace }}/../
-        env:
-          TEST_MODULE: ${{ vars.FOLDER_WITH_VERSION }}
+        working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
         run: |
           pip install --user scipion-testrunner
           scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
