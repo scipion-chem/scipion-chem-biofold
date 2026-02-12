@@ -7,4 +7,5 @@
 from .protocol_import_predictions import ProtImportPredictions
 from .protocol_boltz import ProtBoltz
 from .protocol_chai import ProtChai
+from .protocol_protenix import ProtProtenix
 
