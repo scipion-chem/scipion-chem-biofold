@@ -70,6 +70,7 @@ class TestBoltz(BaseTest):
     def _runBoltz(self):
         protBoltz = self.newProtocol(
             ProtBoltz,
+            useGpu=False,
             inputOrigin=2,
             entityType=1,
             recyclingSteps=1,
