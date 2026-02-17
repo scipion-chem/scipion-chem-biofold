@@ -24,9 +24,6 @@
 # *
 # **************************************************************************
 
-from os.path import join, exists
-
-import pwem
 from scipion.install.funcs import InstallHelper
 
 from pwchem import Plugin as pwchemPlugin
@@ -47,6 +44,7 @@ class Plugin(pwchemPlugin):
         """
         cls._defineEmVar(BOLTZ_DIC['home'], cls.getEnvName(BOLTZ_DIC))
         cls._defineEmVar(CHAI_DIC['home'], cls.getEnvName(CHAI_DIC))
+        cls._defineEmVar(PROTENIX_DIC['home'], cls.getEnvName(PROTENIX_DIC))
 
     @classmethod
     def addBoltzPackage(cls, env, default=True):
