@@ -23,6 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import subprocess
+import unittest
+
 from biofold.protocols import ProtChai, ProtBoltz
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 
@@ -38,14 +41,23 @@ defSetSeqs = '''1) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile
                          (names[0], defSetPDBChain, defSetPDBFile)
 
 
+def gpu_available():
+    try:
+        # run nvidia-smi, check if it exists and returns 0
+        subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
+
+
 class TestChai(BaseTest):
     @classmethod
     def setUpClass(cls):
+        if not gpu_available():
+            raise unittest.SkipTest("No GPU available, skipping Chai tests.")
         cls.ds = DataSet.getDataSet('model_building_tutorial')
         setupTestProject(cls)
-        import torch
-        if not torch.cuda.is_available():
-            raise unittest.SkipTest("No GPU available, skipping Chai tests.")
 
     def _runChai(self):
         protChai = self.newProtocol(
