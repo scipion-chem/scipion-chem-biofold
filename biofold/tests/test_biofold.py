@@ -50,12 +50,10 @@ def gpu_available():
         return False
 
 
-
+@unittest.skipIf(not gpu_available(), "No GPU available, skipping Chai tests.")
 class TestChai(BaseTest):
     @classmethod
     def setUpClass(cls):
-        if not gpu_available():
-            raise unittest.SkipTest("No GPU available, skipping Chai tests.")
         cls.ds = DataSet.getDataSet('model_building_tutorial')
         setupTestProject(cls)
 
