@@ -44,6 +44,9 @@ class TestChai(BaseTest):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
         setupTestProject(cls)
 
+        if not torch.cuda.is_available():
+            raise unittest.SkipTest("No GPU available, skipping Chai tests.")
+
     def _runChai(self):
         protChai = self.newProtocol(
             ProtChai,
