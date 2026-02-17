@@ -4,4 +4,4 @@
 # Find documentation here: https://scipion-em.github.io/docs/docs/developer/creating-a-viewer
 # **************************************************************************
 
-from .viewer_alphafold3 import ProtImportViewer
+from .viewer_models import ProtImportViewer

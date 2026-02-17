@@ -3,13 +3,13 @@ import os
 from pwem.viewers import Chimera
 from pyworkflow.viewer import Viewer
 
-from biofold.protocols import ProtImportPredictions
+from biofold.protocols import ProtImportPredictions, ProtBoltz, ProtChai
 
 
 class ProtImportViewer(Viewer):
     """ Viewer for ProtImportPredictions protocol output. """
     _label = 'viewer discrepancies'
-    _targets = [ProtImportPredictions]
+    _targets = [ProtImportPredictions, ProtBoltz, ProtChai]
 
     def visualize(self, obj, **args):
         # Create Chimera command file
