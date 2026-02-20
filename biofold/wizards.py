@@ -27,7 +27,7 @@
 import json
 import os
 
-from biofold.protocols import ProtBoltz, ProtChai
+from biofold.protocols import ProtBoltz, ProtChai, ProtIntelliFold
 from pwem.objects import AtomStruct, Sequence
 from pwem.wizards import SelectResidueWizard
 from pyworkflow.object import Pointer
@@ -130,6 +130,7 @@ AddSequenceWizardBoltz().addTarget(protocol=ProtBoltz,
                                       'inpChain', 'inpPositions'],
                               outputs=['inputList', 'inputPointers'])
 
+
 class AddSequenceWizardChai(SelectResidueWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
@@ -198,5 +199,10 @@ class AddSequenceWizardChai(SelectResidueWizard):
 AddSequenceWizardChai().addTarget(protocol=ProtChai,
                               targets=['addInput'],
                               inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
+                                      'inpChain', 'inpPositions'],
+                              outputs=['inputList', 'inputPointers'])
+AddSequenceWizardChai().addTarget(protocol=ProtIntelliFold,
+                              targets=['addInput'],
+                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
                                       'inpChain', 'inpPositions'],
                               outputs=['inputList', 'inputPointers'])

@@ -36,4 +36,15 @@ class BoltzEntity:
         self.cyclic = cyclic
         self.modifications = []
 
+class IntelliFoldEntity:
+    def __init__(self, entity_type, chain_id, sequence=None,
+                 smiles=None, ccd=None, msa=None):
+        self.entity_type = entity_type
+        self.ids = [chain_id]
+        self.sequence = sequence
+        self.smiles = smiles
+        self.ccd = ccd
+        self.msa = msa
+        self.modifications = []
+
 

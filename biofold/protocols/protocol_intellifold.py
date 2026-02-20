@@ -24,26 +24,27 @@
 # *
 # **************************************************************************
 import json
+import shutil
 import string
 
 import os
 import pyworkflow.protocol.params as params
-from biofold.objects import BoltzEntity
+from biofold.objects import IntelliFoldEntity
 from pwem.protocols import EMProtocol
 from pwchem import Plugin
-from biofold.constants import BOLTZ_DIC
+from biofold.constants import INTELLIFOLD_DIC
 
-from pwem.objects import  AtomStruct
+from pwem.objects import AtomStruct, SetOfAtomStructs
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 from pwchem.utils.utilsFasta import parseFasta
 
 
 
-class ProtBoltz(EMProtocol):
+class ProtIntelliFold(EMProtocol):
     """
-    Protocol to use Boltz-2 model.
+    Protocol to use IntelliFold model.
     """
-    _label = 'boltz-2 modelling'
+    _label = 'intellifold modelling'
     protSeq = ProtDefineSetOfSequences()
 
     # -------------------------- DEFINE param functions ----------------------
@@ -69,10 +70,6 @@ class ProtBoltz(EMProtocol):
         form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 2',
                       label='Input positions: ',
                       help='Specify the positions of the sequence to add in the output.')
-
-        form.addParam('cyclic', params.BooleanParam, default=False,
-                      label="Cyclic: ",
-                      help='Choose whether the input is cyclic or not.')
 
         form.addParam('addInput', params.LabelParam, condition='inputOrigin != 2',
                       label='Add input: ',
@@ -107,22 +104,22 @@ class ProtBoltz(EMProtocol):
                       help='Select the results fasta file.')
 
         group = form.addGroup('Parameters')
-        group.addParam('infPot', params.BooleanParam, default=False,
-                        label="Inference potentials: ",
-                        help='Choose whether to use inference potentials to improve physical plausibility of the predicted poses.')
-        group.addParam('recyclingSteps', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('recyclingSteps', params.IntParam, default=10, expertLevel=params.LEVEL_ADVANCED,
                         label='Recycling steps: ', help="Number of recycling steps for prediction.")
         group.addParam('samplingSteps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
-        group.addParam('diffusionSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('diffusionSamples', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
                         label='Diffusion samples: ', help="Number of diffusion samples for prediction.")
-        group.addParam('stepScale', params.FloatParam, default=1.638,
-                        label='Steps size: ', help="Number of step size. Its related to the temperature at which the diffusion process samples the distribution.")
-        group.addParam('affinityMWcorr', params.BooleanParam, default=False,
-                       label="Molecular weight correction: ",
-                       help='Choose whether to add the molecular weight correction to the affinity prediction.')
-        group.addParam('diffusionSamplesAff', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
-                       label='Diffusion samples for affinity: ', help="Number of diffusion samples for affinity.")
+        group.addParam('msa', params.BooleanParam, default=True,
+                       label="Use MSA: ",
+                       help='Choose whether to use multiple sequence alignment.')
+        group.addParam('model', params.EnumParam, default=2,
+                      label='Prediction model: ', choices=['v1', 'v2', 'v2-flash'],
+                      help="Options are 'v1', 'v2', and 'v2-flash'. 'v2-flash' is the default and recommended model, "
+                           "which is faster and more accurate than 'v1' and 'v2'. 'v1' is the original model used in "
+                           "the IntelliFold paper, and 'v2' is an improved version of the model with better performance "
+                           "but slower inference speed than 'v2-flash'. You can choose the model based on your needs and computational resources.")
+
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -133,7 +130,7 @@ class ProtBoltz(EMProtocol):
         else:
             self._insertFunctionStep(self.createInputFileStep)
         self._insertFunctionStep(self.createYamlFileStep)
-        self._insertFunctionStep(self.runBoltzStep)
+        self._insertFunctionStep(self.runIntelliFoldStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def createYamlFileStep(self):
@@ -146,7 +143,7 @@ class ProtBoltz(EMProtocol):
             self,
             program="python",
             args=f"{scriptPath} {jsonPath} {yamlPath}",
-            condaDic=BOLTZ_DIC
+            condaDic=INTELLIFOLD_DIC
         )
 
     def createJsonFromFastaStep(self):
@@ -159,11 +156,9 @@ class ProtBoltz(EMProtocol):
         for seqName, sequence in seqDic.items():
             chainId = next(chainIdIiter)
             entity = self.guessEntityType(sequence)
-            cyclic = self.cyclic.get()
 
             entityDict = {
                 "id": chainId,
-                "cyclic": cyclic,
                 "sequence": sequence
             }
 
@@ -186,15 +181,13 @@ class ProtBoltz(EMProtocol):
             seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
             _, sequence = next(iter(seqDic.items()))
             entity = inpJson.get('entity', 'protein')
-            cyclic = inpJson.get('cyclic', False)
 
             chainId = next(chainIdIiter)
 
-            entity = BoltzEntity(
+            entity = IntelliFoldEntity(
                 entity_type=entity,
                 chain_id=chainId,
-                sequence=sequence,
-                cyclic=cyclic
+                sequence=sequence
             )
             entities.append(entity)
 
@@ -206,7 +199,6 @@ class ProtBoltz(EMProtocol):
                 e.smiles,
                 e.ccd,
                 e.msa,
-                e.cyclic
             )
             if key not in merged:
                 merged[key] = e
@@ -216,14 +208,13 @@ class ProtBoltz(EMProtocol):
         sequences = []
         for e in merged.values():
             body = {
-                "id": e.ids if len(e.ids) > 1 else e.ids[0],
-                "cyclic": e.cyclic
+                "id": e.ids if len(e.ids) > 1 else e.ids[0]
             }
 
             if e.entity_type in ("protein", "dna", "rna"):
                 body["sequence"] = e.sequence
                 if e.msa:
-                    body["msa"] = e.msa
+                    body["msa"] = "empty"
 
             sequences.append({e.entity_type: body})
 
@@ -234,65 +225,96 @@ class ProtBoltz(EMProtocol):
 
 
 
-    def runBoltzStep(self):
+    def runIntelliFoldStep(self):
         filePath = os.path.abspath(self._getPath("input.yaml"))
         args = [str(filePath)]
 
-        if self.infPot.get():
-            args.append("--use_potentials")
+        if self.msa.get():
+            args.append("--use_msa_server")
 
-        args.append("--use_msa_server --cache ./mol")
-        args.append(f" --recycling_steps {self.recyclingSteps.get()}")
-        args.append(f" --sampling_steps {self.samplingSteps.get()}")
-        args.append(f" --diffusion_samples {self.diffusionSamples.get()}")
-        args.append(f" --step_scale {self.stepScale.get()}")
+        args.extend([
+            "--recycling_iters", str(self.recyclingSteps.get()),
+            "--sampling_steps", str(self.samplingSteps.get()),
+            "--num_diffusion_samples", str(self.diffusionSamples.get()),
+            "--model", self.getEnumText('model'),
+            "--num_workers", str(self.numberOfThreads.get()),
+            "--out_dir", os.path.abspath(self._getPath('intellifold_output'))
+        ])
 
-        if self.affinityMWcorr.get():
-            args.append(" --affinity_mw_correction")
-
-        args.append(f" --diffusion_samples_affinity {self.diffusionSamplesAff.get()}")
-        args.append(f" --out_dir {os.path.abspath(self._getPath())}")
-
-        if self.useGpu.get():
-            gpu_ids = self.gpuList.get()
-            selected_gpu = gpu_ids.split(",")[0]
-            os.environ["CUDA_VISIBLE_DEVICES"] = selected_gpu
-            args.append("--accelerator gpu")
-        else:
-            args.append("--accelerator cpu")
 
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
-            condaDic=BOLTZ_DIC,
-            program="boltz predict",
-            cwd=os.path.abspath(Plugin.getVar(BOLTZ_DIC['home']))
+            condaDic=INTELLIFOLD_DIC,
+            program="intellifold predict",
+            cwd=os.path.abspath(Plugin.getVar(INTELLIFOLD_DIC['home']))
         )
 
     def createOutputStep(self):
-        predictionsPath = os.path.join(os.path.abspath(self._getPath()), "boltz_results_input", "predictions")
+        resultsPath = os.path.join(self._getPath(), "intellifold_output/input/predictions/input")
+        if not os.path.exists(resultsPath):
+            raise Exception(f"Predictions folder does not exist: {resultsPath}")
 
-        inputFolders = [f for f in os.listdir(predictionsPath) if os.path.isdir(os.path.join(predictionsPath, f))]
-        if not inputFolders:
-            raise Exception(f"No prediction folders found in {predictionsPath}")
-
-        inputFolder = os.path.join(predictionsPath, inputFolders[0])
-
-        cifFiles = sorted([f for f in os.listdir(inputFolder) if f.lower().endswith('.cif')])
+        cifFiles = sorted([f for f in os.listdir(resultsPath) if f.lower().endswith('.cif')])
         if not cifFiles:
-            raise Exception(f"No CIF files found in {inputFolder}")
+            raise Exception(f"No CIF files found in {resultsPath}")
 
-        cifPath = os.path.join(inputFolder, cifFiles[0])
+        outPath = os.path.join(self._getExtraPath(), 'outputs')
+        os.makedirs(outPath, exist_ok=True)
 
-        bestStruct = AtomStruct(filename=cifPath)
+        outputSet = SetOfAtomStructs.create(self._getPath())
+        self.meanConf = {}
+
+        for cifName in cifFiles:
+            cifPath = os.path.join(resultsPath, cifName)
+            summaryFile = cifPath.replace('.cif', '_summary_confidences.json')
+            if not os.path.exists(summaryFile):
+                raise Exception(f"Missing summary confidence file for {cifName}")
+
+            with open(summaryFile) as f:
+                summary = json.load(f)
+
+            self.meanConf[cifName] = summary.get('ranking_score', 0)
+
+            dst = os.path.join(outPath, cifName)
+            shutil.copy(cifPath, dst)
+            atomStruct = AtomStruct(filename=dst)
+            outputSet.append(atomStruct)
+
+        self.bestModel = max(self.meanConf, key=self.meanConf.get)
+        bestStructPath = os.path.join(outPath, self.bestModel)
+        bestStruct = AtomStruct(filename=bestStructPath)
+
+        resultsFile = os.path.join(self._getPath(), 'results.txt')
+        with open(resultsFile, 'w') as f:
+            f.write("Model\tRankingScore\tpLDDT\tPTM\n")
+            for cifName in sorted(self.meanConf.keys()):
+                summaryFile = os.path.join(resultsPath, cifName.replace('.cif', '_summary_confidences.json'))
+                with open(summaryFile) as sf:
+                    summary = json.load(sf)
+                ranking_score = summary.get('ranking_score', 0)
+                plddt = summary.get('plddt', 0)
+                ptm = summary.get('ptm', 0)
+                f.write(f"{cifName}\t{ranking_score:.3f}\t{plddt:.3f}\t{ptm:.3f}\n")
+
+            f.write(f"BEST\t{self.bestModel}\t{self.meanConf[self.bestModel]:.3f}\n")
 
         self._defineOutputs(
-            outputAtomStruct=bestStruct
+            outputBestAtomStruct=bestStruct,
+            outputSetOfAtomStructs=outputSet
         )
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = []
+        resultsFile = os.path.join(self._getPath(), 'results.txt')
+        if not os.path.exists(resultsFile):
+            return ["Results file does not exist."]
+
+        summary = ["IntelliFold predictions summary:"]
+        with open(resultsFile) as f:
+            for line in f:
+                summary.append(line.strip())
+
         return summary
 
     def _methods(self):

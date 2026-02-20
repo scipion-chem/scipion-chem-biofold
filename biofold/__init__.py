@@ -37,6 +37,7 @@ class Plugin(pwchemPlugin):
     def defineBinaries(cls, env):
         cls.addBoltzPackage(env)
         cls.addChaiPackage(env)
+        cls.addIntelliFoldPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -44,7 +45,7 @@ class Plugin(pwchemPlugin):
         """
         cls._defineEmVar(BOLTZ_DIC['home'], cls.getEnvName(BOLTZ_DIC))
         cls._defineEmVar(CHAI_DIC['home'], cls.getEnvName(CHAI_DIC))
-        cls._defineEmVar(PROTENIX_DIC['home'], cls.getEnvName(PROTENIX_DIC))
+        cls._defineEmVar(INTELLIFOLD_DIC['home'], cls.getEnvName(INTELLIFOLD_DIC))
 
     @classmethod
     def addBoltzPackage(cls, env, default=True):
@@ -63,6 +64,31 @@ class Plugin(pwchemPlugin):
             "git clone --branch v2.2.1 --depth 1 https://github.com/jwohlwend/boltz.git && "
             "pip install --editable ./boltz[cuda]",
             f"{BOLTZ_DIC['name']}_installed"
+        )
+
+        installer.addPackage(
+            env,
+            dependencies=['conda', 'pip', 'git'],
+            default=default
+        )
+
+    @classmethod
+    def addIntelliFoldPackage(cls, env, default=True):
+        installer = InstallHelper(
+            INTELLIFOLD_DIC['name'],
+            packageHome=cls.getVar(INTELLIFOLD_DIC['home']),
+            packageVersion=INTELLIFOLD_DIC['version']
+        )
+
+        installer.addCommand(
+            "git clone --branch v2.0.0 --depth 1 https://github.com/IntelliGen-AI/IntelliFold.git",
+            f"{INTELLIFOLD_DIC['name']}_cloned"
+        ).addCommand(
+            f"cd IntelliFold && conda env create -f environment.yaml -n {INTELLIFOLD_DIC['name']}-{INTELLIFOLD_DIC['version']}",
+            f"{INTELLIFOLD_DIC['name']}_env_created"
+        ).addCommand(
+            f"cd IntelliFold && conda run -n {INTELLIFOLD_DIC['name']}-{INTELLIFOLD_DIC['version']} pip install -e . && touch ../intellifold_installed",
+            f"{INTELLIFOLD_DIC['name']}_installed"
         )
 
         installer.addPackage(
