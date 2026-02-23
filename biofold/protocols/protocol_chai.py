@@ -29,6 +29,8 @@ import os
 import re
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
+from pyworkflow.object import String
+
 from pwchem import Plugin
 from biofold.constants import CHAI_DIC
 
@@ -224,10 +226,14 @@ class ProtChai(EMProtocol):
         outputSet = SetOfAtomStructs.create(self._getPath())
         for cifName in extraFiles:
             atomStruct = AtomStruct(filename=os.path.join(resultsPath, cifName))
+            atomStruct.origin = String()
+            atomStruct.setAttributeValue('origin', 'Chai')
             outputSet.append(atomStruct)
 
         bestSrc = os.path.join(resultsPath, self.bestModel + '.cif')
         bestStruct = AtomStruct(filename=bestSrc)
+        bestStruct.origin = String()
+        bestStruct.setAttributeValue('origin', 'Chai')
 
         self._defineOutputs(
             outputBestAtomStruct=bestStruct,

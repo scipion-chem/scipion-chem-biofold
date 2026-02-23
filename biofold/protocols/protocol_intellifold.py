@@ -31,6 +31,8 @@ import os
 import pyworkflow.protocol.params as params
 from biofold.objects import IntelliFoldEntity
 from pwem.protocols import EMProtocol
+from pyworkflow.object import String
+
 from pwchem import Plugin
 from biofold.constants import INTELLIFOLD_DIC
 
@@ -279,11 +281,15 @@ class ProtIntelliFold(EMProtocol):
             dst = os.path.join(outPath, cifName)
             shutil.copy(cifPath, dst)
             atomStruct = AtomStruct(filename=dst)
+            atomStruct.origin = String()
+            atomStruct.setAttributeValue('origin', 'IntelliFold')
             outputSet.append(atomStruct)
 
         self.bestModel = max(self.meanConf, key=self.meanConf.get)
         bestStructPath = os.path.join(outPath, self.bestModel)
         bestStruct = AtomStruct(filename=bestStructPath)
+        bestStruct.origin = String()
+        bestStruct.setAttributeValue('origin', 'IntelliFold')
 
         resultsFile = os.path.join(self._getPath(), 'results.txt')
         with open(resultsFile, 'w') as f:

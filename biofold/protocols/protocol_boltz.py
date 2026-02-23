@@ -30,6 +30,8 @@ import os
 import pyworkflow.protocol.params as params
 from biofold.objects import BoltzEntity
 from pwem.protocols import EMProtocol
+from pyworkflow.object import String
+
 from pwchem import Plugin
 from biofold.constants import BOLTZ_DIC
 
@@ -285,6 +287,8 @@ class ProtBoltz(EMProtocol):
         cifPath = os.path.join(inputFolder, cifFiles[0])
 
         bestStruct = AtomStruct(filename=cifPath)
+        bestStruct.origin = String()
+        bestStruct.setAttributeValue('origin', 'Boltz')
 
         self._defineOutputs(
             outputAtomStruct=bestStruct
