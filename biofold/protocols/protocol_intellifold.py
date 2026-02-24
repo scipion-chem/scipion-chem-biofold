@@ -82,15 +82,6 @@ class ProtIntelliFold(EMProtocol):
         Params:
             form: this is the form to be populated with sections and params.
         """
-        form.addHidden('useGpu', params.BooleanParam, default=True,
-                       label="Use GPU for execution",
-                       help="This protocol has both CPU and GPU implementation. Choose one.")
-
-        form.addHidden('gpuList', params.StringParam, default='0',
-                       label="Choose GPU IDs",
-                       help="Comma-separated GPU devices that can be used.")
-
-
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
                        label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
