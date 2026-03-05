@@ -44,6 +44,109 @@ from pwchem.utils.utilsFasta import parseFasta
 class ProtBoltz(EMProtocol):
     """
     Protocol to use Boltz-2 model.
+
+    AI Generated:
+
+    ProtBoltz - User Manual
+
+    Overview
+    --------
+    The ProtBoltz protocol performs biomolecular structure prediction using the
+    Boltz-2 diffusion-based modelling framework. It supports proteins, DNA, and RNA
+    inputs and can optionally estimate binding affinity. The protocol generates
+    3D structural models from sequence information and returns the best predicted
+    structure as an AtomStruct object.
+
+    This protocol integrates input preprocessing, configuration file generation,
+    model execution, and structured output creation within the Scipion framework.
+
+    Inputs
+    ------
+    Input origin can be selected from:
+
+    1. **Sequence**:
+       - A Sequence object defined within Scipion.
+       - Supports protein, DNA, or RNA sequences.
+
+    2. **AtomStruct**:
+       - Extracts sequence from a provided structure.
+       - Allows specifying chain ID and subsequence positions.
+
+    3. **FASTA file**:
+       - Direct input of a FASTA file containing one or more sequences.
+       - Entity type (protein/DNA/RNA) is automatically inferred.
+
+    Additional input options:
+    - **entityType**: Define biological type (Protein, DNA, RNA).
+    - **cyclic**: Specify whether the molecule is cyclic.
+    - **inputList**: Multiple inputs merged into a single modelling job.
+    - **GPU usage**: Enable GPU acceleration and specify GPU IDs.
+
+    Prediction Parameters
+    ---------------------
+    - **infPot**: Enable inference potentials to improve physical plausibility.
+    - **recyclingSteps**: Number of recycling refinement steps.
+    - **samplingSteps**: Number of diffusion sampling steps.
+    - **diffusionSamples**: Number of diffusion samples for structure prediction.
+    - **stepScale**: Step size scaling factor (controls diffusion temperature).
+    - **affinityMWcorr**: Apply molecular weight correction to affinity prediction.
+    - **diffusionSamplesAff**: Number of diffusion samples for affinity estimation.
+
+    Workflow
+    --------
+    1. **Input Processing**:
+       - Parses sequences from Sequence objects, AtomStruct objects, or FASTA files.
+       - Automatically infers entity type if not specified.
+       - Merges identical entities when applicable.
+       - Generates a structured `input.json` file.
+
+    2. **Configuration Generation**:
+       - Converts `input.json` into `input.yaml` required by Boltz-2.
+
+    3. **Model Execution**:
+       - Executes `boltz predict` using CPU or GPU.
+       - Applies selected diffusion, recycling, and affinity parameters.
+       - Stores results in the protocol working directory.
+
+    4. **Output Creation**:
+       - Retrieves the best predicted CIF structure.
+       - Wraps it into an AtomStruct object.
+
+    Outputs
+    -------
+    - **AtomStruct**: Best predicted 3D structure in CIF format.
+    - Prediction results stored in the protocol output directory.
+
+    Practical Recommendations
+    -------------------------
+    - Use GPU acceleration for faster predictions when available.
+    - Increase recycling steps for improved structural refinement.
+    - Adjust sampling and diffusion parameters depending on system size.
+    - Use inference potentials for better physical realism in complex systems.
+
+    Interpretation
+    --------------
+    The resulting AtomStruct corresponds to the top-ranked Boltz-2 prediction.
+    The output can be used for:
+
+    - Structural visualization
+    - Downstream docking
+    - Interaction energy calculations
+    - Molecular dynamics simulations
+    - Comparative structural analysis
+
+    Warnings
+    --------
+    - Large sequences may require substantial GPU memory.
+    - Multiple entities increase computational cost.
+    - Ensure input sequences are biologically valid and correctly formatted.
+
+    Final Perspective
+    -----------------
+    ProtBoltz provides an integrated interface for advanced diffusion-based
+    biomolecular modelling within Scipion. It streamlines sequence preparation,
+    configuration building, execution, and structure retrieval, enabling
+    reproducible structural prediction workflows.
     """
     _label = 'boltz-2 modelling'
     protSeq = ProtDefineSetOfSequences()

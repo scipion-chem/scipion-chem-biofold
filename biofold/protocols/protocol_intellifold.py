@@ -45,6 +45,127 @@ from pwchem.utils.utilsFasta import parseFasta
 class ProtIntelliFold(EMProtocol):
     """
     Protocol to use IntelliFold model.
+
+    AI Generated:
+
+        ProtIntelliFold - User Manual
+
+        Overview
+        --------
+        The ProtIntelliFold protocol performs biomolecular structure prediction
+        using the IntelliFold diffusion-based modelling framework. It supports
+        proteins, DNA, and RNA inputs and generates multiple 3D structural models
+        in CIF format.
+
+        This protocol integrates sequence preprocessing, configuration file
+        generation, IntelliFold execution, confidence extraction, and structured
+        output creation within the Scipion framework.
+
+        Inputs
+        ------
+        Input origin can be selected from:
+
+        1. **Sequence**:
+           - A Sequence object defined within Scipion.
+           - Supports protein, DNA, or RNA sequences.
+
+        2. **AtomStruct**:
+           - Extracts sequence from a provided structure.
+           - Allows specifying chain ID and subsequence positions.
+
+        3. **FASTA file**:
+           - Direct input of a FASTA file containing one or more sequences.
+           - Entity type (protein/DNA/RNA) is automatically inferred.
+
+        Additional input options:
+        - **entityType**: Define biological type (Protein, DNA, RNA).
+        - **inpChain**: Specify chain when using AtomStruct input.
+        - **inpPositions**: Select specific residue ranges.
+        - **inputList**: Merge multiple inputs into a single modelling job.
+
+        Prediction Parameters
+        ---------------------
+        - **recyclingSteps**: Number of recycling refinement iterations.
+        - **samplingSteps**: Number of diffusion sampling steps.
+        - **diffusionSamples**: Number of diffusion samples for structure prediction.
+        - **msa**: Enable usage of multiple sequence alignment server.
+        - **model**: Select prediction model version:
+            - v1: Original IntelliFold model.
+            - v2: Improved accuracy, slower inference.
+            - v2-flash: Recommended default; faster and more accurate.
+
+        Workflow
+        --------
+        1. **Input Processing**:
+           - Parses sequences from Sequence objects, AtomStruct objects,
+             or FASTA files.
+           - Automatically infers entity type when required.
+           - Generates a structured `input.json` file describing all entities.
+
+        2. **Configuration Generation**:
+           - Converts `input.json` into `input.yaml` required by IntelliFold.
+
+        3. **Model Execution**:
+           - Executes `intellifold predict` inside the configured Conda environment.
+           - Applies selected recycling, sampling, diffusion, and model parameters.
+           - Optionally connects to the MSA server.
+           - Stores predictions in the protocol working directory.
+
+        4. **Confidence Extraction and Ranking**:
+           - Reads ranking scores and confidence metrics from
+             `_summary_confidences.json` files.
+           - Extracts:
+               - ranking_score
+               - pLDDT
+               - pTM
+           - Computes model ranking and selects the best predicted structure.
+           - Generates a `results.txt` summary file.
+
+        5. **Output Creation**:
+           - Copies all predicted CIF files into the protocol output folder.
+           - Wraps them into a SetOfAtomStructs object.
+           - Identifies and returns the best predicted structure separately.
+
+        Outputs
+        -------
+        - **outputBestAtomStruct**: Best predicted 3D structure in CIF format
+          (highest ranking score).
+        - **outputSetOfAtomStructs**: Set containing all predicted structures.
+        - **results.txt**: Tabulated summary including ranking score, pLDDT, and pTM.
+
+        Practical Recommendations
+        -------------------------
+        - Use the 'v2-flash' model for optimal balance between speed and accuracy.
+        - Increase recycling steps for improved structural refinement.
+        - Adjust diffusion samples depending on system complexity.
+        - Enable MSA for improved prediction quality when available.
+
+        Interpretation
+        --------------
+        The resulting AtomStruct corresponds to the top-ranked IntelliFold
+        prediction according to the ranking score metric.
+
+        The output structures can be used for:
+
+        - Structural visualization
+        - Docking studies
+        - Interaction analysis
+        - Molecular dynamics simulations
+        - Comparative structural modelling
+
+        Warnings
+        --------
+        - Large sequences may require significant computational resources.
+        - Increasing diffusion samples substantially increases runtime.
+        - Ensure input sequences are biologically valid and correctly formatted.
+
+        Final Perspective
+        -----------------
+        ProtIntelliFold provides an integrated interface for IntelliFold-based
+        biomolecular modelling within Scipion. It automates sequence preparation,
+        configuration building, model execution, confidence evaluation, and
+        structured result retrieval, enabling reproducible structural prediction
+        workflows.
     """
     _label = 'intellifold modelling'
     protSeq = ProtDefineSetOfSequences()

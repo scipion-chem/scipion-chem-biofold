@@ -40,6 +40,116 @@ from pwem.objects import  AtomStruct, SetOfAtomStructs
 class ProtChai(EMProtocol):
     """
     Protocol to use Chai-1 model.
+
+    AI Generated:
+
+        ProtChai - User Manual
+
+        Overview
+        --------
+        The ProtChai protocol performs biomolecular structure prediction using the
+        Chai-1 modelling framework. It supports proteins, DNA, and RNA inputs and
+        generates 3D structural models in CIF format.
+
+        This protocol integrates sequence preprocessing, FASTA preparation,
+        Chai-1 execution, confidence score extraction, and structured output
+        generation within the Scipion framework.
+
+        Inputs
+        ------
+        Input origin can be selected from:
+
+        1. **Sequence**:
+           - A Sequence object defined within Scipion.
+           - Supports protein, DNA, or RNA sequences.
+
+        2. **AtomStruct**:
+           - Extracts sequence from a provided structure.
+           - Allows specifying chain ID and subsequence positions.
+
+        3. **FASTA file**:
+           - Direct input of a FASTA file containing one or more sequences.
+           - Entity type (protein/DNA/RNA) is automatically inferred if not
+             explicitly defined.
+           - FASTA headers are reformatted to comply with Chai-1 requirements.
+
+        Additional input options:
+        - **entityType**: Define biological type (Protein, DNA, RNA).
+        - **inpChain**: Specify chain when using AtomStruct input.
+        - **inpPositions**: Select specific residue ranges.
+        - **inputList**: Merge multiple inputs into a single modelling job.
+
+        Prediction Parameters
+        ---------------------
+        - **msa**: Enable usage of the MSA server to improve prediction quality.
+        - **trunkRecycles**: Number of trunk recycling refinement steps.
+        - **timeSteps**: Number of diffusion sampling timesteps.
+        - **trunkSamples**: Number of trunk samples per prediction.
+        - **diffNsamples**: Number of diffusion samples for affinity estimation.
+
+        Workflow
+        --------
+        1. **Input Processing**:
+           - Parses sequences from Sequence objects, AtomStruct objects,
+             or FASTA files.
+           - Automatically formats sequences into a Chai-compatible FASTA file.
+           - Infers entity type when required.
+
+        2. **Model Execution**:
+           - Executes `chai-lab fold` inside the configured Conda environment.
+           - Applies selected recycling, sampling, and diffusion parameters.
+           - Optionally connects to the MSA server.
+           - Stores generated CIF files in the protocol working directory.
+
+        3. **Score Extraction**:
+           - Reads per-residue confidence scores from the `B_iso_or_equiv`
+             field in the output CIF files.
+           - Computes the mean score per predicted model.
+           - Automatically selects the highest-scoring structure.
+
+        4. **Output Creation**:
+           - Wraps all predicted CIF models into a SetOfAtomStructs object.
+           - Identifies and returns the best predicted structure separately.
+
+        Outputs
+        -------
+        - **outputBestAtomStruct**: Best predicted 3D structure in CIF format
+          (highest mean confidence score).
+        - **outputSetOfAtomStructs**: Set containing all predicted structures.
+        - Prediction results stored in the protocol output directory.
+
+        Practical Recommendations
+        -------------------------
+        - Enable MSA usage for improved structural accuracy.
+        - Increase recycling steps for enhanced refinement at the cost of runtime.
+        - Adjust diffusion and sampling parameters depending on sequence length.
+        - Use multiple trunk samples for more robust predictions in difficult cases.
+
+        Interpretation
+        --------------
+        The resulting AtomStruct corresponds to the top-ranked Chai-1 prediction
+        according to the mean per-residue confidence score.
+
+        The output structures can be used for:
+
+        - Structural visualization
+        - Docking studies
+        - Interaction analysis
+        - Molecular dynamics simulations
+        - Comparative structural modelling
+
+        Warnings
+        --------
+        - Large sequences increase computational time and memory usage.
+        - MSA server availability may affect runtime.
+        - Ensure sequences are biologically valid and correctly formatted.
+
+        Final Perspective
+        -----------------
+        ProtChai provides an integrated interface for Chai-1-based biomolecular
+        structure prediction within Scipion. It streamlines sequence preparation,
+        model execution, score evaluation, and structured result retrieval,
+        enabling reproducible and automated structural modelling workflows.
     """
     _label = 'chai-1 modelling'
     NEWFILE = False
