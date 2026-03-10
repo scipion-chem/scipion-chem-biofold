@@ -400,6 +400,29 @@ class ProtBoltz(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
+        resultsPath = os.path.join(os.path.abspath(self._getPath()), "boltz_results_input", "predictions/input")
+
+        jsonFiles = sorted([f for f in os.listdir(resultsPath) if f.lower().endswith('.json')])
+        if not jsonFiles:
+            summary.append(f"No JSON results found in {resultsPath}")
+            return summary
+
+        jsonPath = os.path.join(resultsPath, jsonFiles[0])
+        modelName = os.path.splitext(jsonFiles[0])[0]
+
+        try:
+            import json as js
+            with open(jsonPath) as f:
+                data = js.load(f)
+            confScore = data.get("confidence_score", None)
+            summary.append(f"Predicted structure: {modelName}")
+            if confScore is not None:
+                summary.append(f"Confidence score: {confScore:.3f}")
+            else:
+                summary.append("Confidence score: not found")
+        except Exception as e:
+            summary.append(f"Error reading JSON score from {jsonPath}: {e}")
+
         return summary
 
     def _methods(self):
