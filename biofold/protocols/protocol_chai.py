@@ -295,8 +295,8 @@ class ProtChai(EMProtocol):
 
         extraFiles = self.getExtraFiles()
 
-        for cifName in extraFiles:
-            cifPath = os.path.join(resultsPath, cifName)
+        for cifPath in extraFiles:
+            cifName = os.path.basename(cifPath)
             modelName = os.path.splitext(cifName)[0]
 
             headers = []
@@ -331,16 +331,24 @@ class ProtChai(EMProtocol):
         self.bestModel = max(self.meanScore, key=self.meanScore.get)
 
     def createOutputStep(self):
-        resultsPath = os.path.join((self._getPath()), "chai_results")
         extraFiles = self.getExtraFiles()
         outputSet = SetOfAtomStructs.create(self._getPath())
-        for cifName in extraFiles:
-            atomStruct = AtomStruct(filename=os.path.join(resultsPath, cifName))
+
+        bestSrc = None
+
+        for cifPath in extraFiles:
+            atomStruct = AtomStruct(filename=cifPath)
             atomStruct.origin = String()
             atomStruct.setAttributeValue('origin', 'Chai')
             outputSet.append(atomStruct)
 
-        bestSrc = os.path.join(resultsPath, self.bestModel + '.cif')
+            modelName = os.path.splitext(os.path.basename(cifPath))[0]
+            if modelName == self.bestModel:
+                bestSrc = cifPath
+
+        if bestSrc is None:
+            raise Exception(f"Best model {self.bestModel} not found among output files.")
+
         bestStruct = AtomStruct(filename=bestSrc)
         bestStruct.origin = String()
         bestStruct.setAttributeValue('origin', 'Chai')
@@ -368,6 +376,7 @@ class ProtChai(EMProtocol):
 
         scores = {}
         logFile = os.path.join(self._getPath('logs'), "run.stdout")
+
         if os.path.exists(logFile):
             with open(logFile) as f:
                 for line in f:
@@ -375,16 +384,23 @@ class ProtChai(EMProtocol):
                     if m:
                         score = float(m.group(1))
                         cifPath = m.group(2)
-                        modelName = os.path.splitext(os.path.basename(cifPath))[0]
+
+                        relPath = os.path.relpath(cifPath, resultsPath)
+                        modelName = os.path.splitext(relPath)[0]
+
                         scores[modelName] = score
 
-        summary.append("Scores per model:")
-        for modelName in sorted(scores.keys()):
-            summary.append(f"  {modelName}: {scores[modelName]}")
+        if not scores:
+            summary.append("No scores detected in log file.")
+            return summary
 
-        if scores:
-            bestModel = max(scores, key=scores.get)
-            summary.append(f"\nBest structure (highest score): {bestModel}.cif")
+        summary.append("Scores per model:")
+
+        for modelName in sorted(scores.keys()):
+            summary.append(f"  {modelName}: {scores[modelName]:.4f}")
+
+        bestModel = max(scores, key=scores.get)
+        summary.append(f"\nBest structure (highest score): {bestModel}.cif")
 
         return summary
 
@@ -405,12 +421,13 @@ class ProtChai(EMProtocol):
         extraFiles = []
         resultsPath = os.path.join(os.path.abspath(self._getPath()), "chai_results")
 
-        for name in sorted(os.listdir(resultsPath)):
-            if name.lower().endswith('.cif'):
-                extraFiles.append(name)
+        for root, dirs, files in os.walk(resultsPath):
+            for name in files:
+                if name.lower().endswith(".cif"):
+                    extraFiles.append(os.path.join(root, name))
 
         if not extraFiles:
-            raise Exception("No CIF files found in the selected folder.")
+            raise Exception("No CIF files found in chai_results.")
 
         return extraFiles
 
