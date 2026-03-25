@@ -28,4 +28,5 @@
 BOLTZ_DIC = {'name': 'boltz', 'version': '2.2.1', 'home': 'BOLTZ_HOME'}
 CHAI_DIC = {'name': 'chai', 'version': '0.6.1', 'home': 'CHAI_HOME'}
 INTELLIFOLD_DIC = {'name': 'intellifold', 'version': '2.0.0', 'home': 'INTELLIFOLD_HOME'}
+PROTENIX_DIC = {'name': 'protenix', 'version': '1.1.0', 'home': 'PROTENIX_HOME'}
 

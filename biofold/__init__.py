@@ -38,6 +38,7 @@ class Plugin(pwchemPlugin):
         cls.addBoltzPackage(env)
         cls.addChaiPackage(env)
         cls.addIntelliFoldPackage(env)
+        cls.addProtenixPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -46,6 +47,7 @@ class Plugin(pwchemPlugin):
         cls._defineEmVar(BOLTZ_DIC['home'], cls.getEnvName(BOLTZ_DIC))
         cls._defineEmVar(CHAI_DIC['home'], cls.getEnvName(CHAI_DIC))
         cls._defineEmVar(INTELLIFOLD_DIC['home'], cls.getEnvName(INTELLIFOLD_DIC))
+        cls._defineEmVar(PROTENIX_DIC['home'], cls.getEnvName(PROTENIX_DIC))
 
     @classmethod
     def addBoltzPackage(cls, env, default=True):
@@ -113,6 +115,30 @@ class Plugin(pwchemPlugin):
             f"{cls.getEnvActivationCommand(CHAI_DIC)} && "
             "pip install chai_lab==0.6.1",
             f"{CHAI_DIC['name']}_installed"
+        )
+
+        installer.addPackage(
+            env,
+            dependencies=['conda', 'pip', 'git'],
+            default=default
+        )
+
+    @classmethod
+    def addProtenixPackage(cls, env, default=True):
+        installer = InstallHelper(
+            PROTENIX_DIC['name'],
+            packageHome=cls.getVar(PROTENIX_DIC['home']),
+            packageVersion=PROTENIX_DIC['version']
+        )
+
+        installer.getCondaEnvCommand(
+            PROTENIX_DIC['name'],
+            binaryVersion=PROTENIX_DIC['version'],
+            pythonVersion='3.11'
+        ).addCommand(
+            f"{cls.getEnvActivationCommand(PROTENIX_DIC)} && "
+            "pip install protenix==1.1.0",
+            f"{PROTENIX_DIC['name']}_installed"
         )
 
         installer.addPackage(
