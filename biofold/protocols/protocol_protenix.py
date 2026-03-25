@@ -34,7 +34,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.object import String
 
 from pwchem import Plugin
-from biofold.constants import CHAI_DIC
+from biofold.constants import PROTENIX_DIC
 
 from pwem.objects import  AtomStruct, SetOfAtomStructs
 from pwchem.utils.utilsFasta import parseFasta
@@ -49,6 +49,7 @@ class ProtProtenix(EMProtocol):
        #todo
     """
     _label = 'protenix modelling'
+    models = ['protenix_base_default_v1.0.0', 'protenix_base_20250630_v1.0.0', 'protenix_base_default_v0.5.0']
 
     # -------------------------- DEFINE param functions ----------------------
     def _addInputForm(self, form):
@@ -98,18 +99,22 @@ class ProtProtenix(EMProtocol):
                       help='Select the fasta file.')
 
 
-        form = form.addGroup('Parameters')
-        form.addParam('msa', params.BooleanParam, default=True,
+        group = form.addGroup('Parameters')
+        group.addParam('msa', params.BooleanParam, default=True,
                       label="Run with MSAs: ",
                       help='Choose whether to run with MSAs for improved performance.')
-        form.addParam('trunkRecycles', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
-                        label='Recycling steps: ', help="Number of recycling steps for prediction.")
-        form.addParam('timeSteps', params.IntParam, default=200,
+        group.addParam('sample', params.IntParam, default=5,
+                      label='Diffusion samples for affinity: ', help="Number of diffusion samples for affinity.")
+        group.addParam('steps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
-        form.addParam('trunkSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
-                        label='Trunk samples: ', help="Number of trunk samples for prediction.")
-        form.addParam('diffNsamples', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
-                       label='Difussion samples for affinity: ', help="Number of diffusion samples for affinity.")
+        group.addParam('model', params.EnumParam, default=0, choices=self.models,
+                        label='Model: ', help="Model options:\n\n- protenix_base_default_v1.0.0: Default model trained with a data cutoff aligned with AlphaFold3 (2021-09-30). "
+                                              "Recommended for fair benchmarking and comparison with other state-of-the-art methods.\n\n- "
+                                              "protenix_base_20250630_v1.0.0: Updated model trained with a more recent data cutoff (2025-06-30). "
+                                              "Recommended for practical applications and best performance.\n\n- protenix_base_default_v0.5.0: Previous model version. "
+                                              "Maintained for backward compatibility with older workflows.")
+
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -118,7 +123,7 @@ class ProtProtenix(EMProtocol):
         else:
             self._insertFunctionStep(self.createProtenixInputFileStep)
 
-        #self._insertFunctionStep(self.runChaiStep)
+        self._insertFunctionStep(self.runProtenixStep)
         #self._insertFunctionStep(self.extractScoreStep)
         #self._insertFunctionStep(self.createOutputStep)
 
@@ -177,29 +182,28 @@ class ProtProtenix(EMProtocol):
                 }
             ], f, indent=2)
 
-    def runChaiStep(self):
-        if (self.inputOrigin.get() == 2 and not self.NEWFILE):
-            filePath = os.path.abspath(self.file.get())
-        else:
-            filePath = os.path.abspath(self._getPath('input.fasta'))
-        args = [str(filePath)]
+    def runProtenixStep(self):
+        jsonPath = os.path.abspath(self._getPath("protenix_input.json"))
+        args = ['-i', str(jsonPath)]
 
-        args.append(os.path.join(os.path.abspath(self._getPath()), "chai_results"))
+        args.append(f'-o {os.path.join(os.path.abspath(self._getPath()), "protenix_results")}')
 
         if self.msa.get():
-            args.append("--use-msa-server")
+            args.append("--use_msa TRUE")
+        else:
+            args.append("--use_msa FALSE")
 
-        args.append(f" --num-trunk-recycles {self.trunkRecycles.get()}")
-        args.append(f" --num-diffn-timesteps {self.timeSteps.get()}")
-        args.append(f" --num-trunk-samples {self.trunkSamples.get()}")
-        args.append(f" --num-diffn-samples {self.diffNsamples.get()}")
+        args.append(f" --sample {self.sample.get()}")
+        args.append(f" --step {self.steps.get()}")
+        args.append(f" --model_name {self.getEnumText('model')}")
+        args.append(f" --nhmmer_n_cpu {self.numberOfThreads.get()}")
 
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
-            condaDic=CHAI_DIC,
-            program="chai-lab fold",
-            cwd=os.path.abspath(Plugin.getVar(CHAI_DIC['home']))
+            condaDic=PROTENIX_DIC,
+            program="protenix pred",
+            cwd=os.path.abspath(Plugin.getVar(PROTENIX_DIC['home']))
         )
 
     def extractScoreStep(self):

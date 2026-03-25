@@ -31,11 +31,12 @@ import pyworkflow.protocol.params as params
 from biofold.objects import BoltzEntity
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String
+import shutil
 
 from pwchem import Plugin
 from biofold.constants import BOLTZ_DIC
 
-from pwem.objects import  AtomStruct
+from pwem.objects import  AtomStruct, SetOfAtomStructs
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 from pwchem.utils.utilsFasta import parseFasta
 
@@ -219,8 +220,8 @@ class ProtBoltz(EMProtocol):
                         label='Recycling steps: ', help="Number of recycling steps for prediction.")
         group.addParam('samplingSteps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
-        group.addParam('diffusionSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
-                        label='Diffusion samples: ', help="Number of diffusion samples for prediction.")
+        group.addParam('diffusionSamples', params.IntParam, default=1,
+                        label='Output models: ', help="Number of output models for prediction.")
         group.addParam('stepScale', params.FloatParam, default=1.638,
                         label='Steps size: ', help="Number of step size. Its related to the temperature at which the diffusion process samples the distribution.")
         group.addParam('affinityMWcorr', params.BooleanParam, default=False,
@@ -375,9 +376,16 @@ class ProtBoltz(EMProtocol):
         )
 
     def createOutputStep(self):
-        predictionsPath = os.path.join(os.path.abspath(self._getPath()), "boltz_results_input", "predictions")
+        predictionsPath = os.path.join(
+            os.path.abspath(self._getPath()),
+            "boltz_results_input",
+            "predictions"
+        )
 
-        inputFolders = [f for f in os.listdir(predictionsPath) if os.path.isdir(os.path.join(predictionsPath, f))]
+        inputFolders = [
+            f for f in os.listdir(predictionsPath)
+            if os.path.isdir(os.path.join(predictionsPath, f))
+        ]
         if not inputFolders:
             raise Exception(f"No prediction folders found in {predictionsPath}")
 
@@ -387,41 +395,79 @@ class ProtBoltz(EMProtocol):
         if not cifFiles:
             raise Exception(f"No CIF files found in {inputFolder}")
 
-        cifPath = os.path.join(inputFolder, cifFiles[0])
+        # Create output directory
+        outPath = os.path.join(self._getExtraPath(), 'outputs')
+        os.makedirs(outPath, exist_ok=True)
 
-        bestStruct = AtomStruct(filename=cifPath)
+        # Create set of structures
+        outputSet = SetOfAtomStructs.create(self._getPath())
+
+        scores = {}
+
+        for cifName in cifFiles:
+            cifPath = os.path.join(inputFolder, cifName)
+
+            modelBase = os.path.splitext(cifName)[0]
+            jsonName = f"confidence_{modelBase}.json"
+            jsonFile = os.path.join(inputFolder, jsonName)
+            score = 0
+
+            if os.path.exists(jsonFile):
+                try:
+                    with open(jsonFile) as f:
+                        data = json.load(f)
+                    score = data.get("confidence_score", 0)
+                except:
+                    pass
+
+            scores[cifName] = score
+
+            # Copy to output folder
+            dst = os.path.join(outPath, cifName)
+            shutil.copy(cifPath, dst)
+
+            atomStruct = AtomStruct(filename=dst)
+            atomStruct.origin = String()
+            atomStruct.setAttributeValue('origin', 'Boltz')
+
+            outputSet.append(atomStruct)
+
+        # Select best model
+        bestModel = max(scores, key=scores.get)
+        bestStructPath = os.path.join(outPath, bestModel)
+
+        bestStruct = AtomStruct(filename=bestStructPath)
         bestStruct.origin = String()
         bestStruct.setAttributeValue('origin', 'Boltz')
 
+        # Optional: write summary file
+        resultsFile = os.path.join(self._getPath(), 'results.txt')
+        with open(resultsFile, 'w') as f:
+            f.write("Model\tConfidenceScore\n")
+            for name in sorted(scores.keys()):
+                f.write(f"{name}\t{scores[name]:.3f}\n")
+            f.write(f"BEST\t{bestModel}\t{scores[bestModel]:.3f}\n")
+
         self._defineOutputs(
-            outputAtomStruct=bestStruct
+            outputBestAtomStruct=bestStruct,
+            outputSetOfAtomStructs=outputSet
         )
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = []
-        resultsPath = os.path.join(os.path.abspath(self._getPath()), "boltz_results_input", "predictions/input")
+        resultsFile = os.path.join(self._getPath(), 'results.txt')
 
-        jsonFiles = sorted([f for f in os.listdir(resultsPath) if f.lower().endswith('.json')])
-        if not jsonFiles:
-            summary.append(f"No JSON results found in {resultsPath}")
-            return summary
+        if not os.path.exists(resultsFile):
+            return ["Results file does not exist."]
 
-        jsonPath = os.path.join(resultsPath, jsonFiles[0])
-        modelName = os.path.splitext(jsonFiles[0])[0]
+        summary = ["Boltz predictions summary:"]
 
         try:
-            import json as js
-            with open(jsonPath) as f:
-                data = js.load(f)
-            confScore = data.get("confidence_score", None)
-            summary.append(f"Predicted structure: {modelName}")
-            if confScore is not None:
-                summary.append(f"Confidence score: {confScore:.3f}")
-            else:
-                summary.append("Confidence score: not found")
+            with open(resultsFile) as f:
+                for line in f:
+                    summary.append(line.strip())
         except Exception as e:
-            summary.append(f"Error reading JSON score from {jsonPath}: {e}")
+            summary.append(f"Error reading results file: {e}")
 
         return summary
 

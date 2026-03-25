@@ -130,17 +130,19 @@ class Plugin(pwchemPlugin):
             packageHome=cls.getVar(PROTENIX_DIC['home']),
             packageVersion=PROTENIX_DIC['version']
         )
-
-        installer.getCondaEnvCommand(
-            PROTENIX_DIC['name'],
-            binaryVersion=PROTENIX_DIC['version'],
-            pythonVersion='3.11'
+        env_name = f"{PROTENIX_DIC['name']}-{PROTENIX_DIC['version']}"
+        installer.addCommand(
+            "git clone --branch v1.1.0 --depth 1 https://github.com/bytedance/Protenix.git",
+            f"{PROTENIX_DIC['name']}_cloned"
+        ).addCommand(
+            f"conda create -n {env_name} python=3.11 -y",
+            f"{PROTENIX_DIC['name']}_env_created"
         ).addCommand(
             f"{cls.getEnvActivationCommand(PROTENIX_DIC)} && "
-            "pip install protenix==1.1.0",
+            f"conda activate {env_name} && "
+            "cd Protenix && pip install -r requirements.txt && pip install .",
             f"{PROTENIX_DIC['name']}_installed"
         )
-
         installer.addPackage(
             env,
             dependencies=['conda', 'pip', 'git'],
