@@ -198,13 +198,20 @@ class ProtProtenix(EMProtocol):
         args.append(f" --model_name {self.getEnumText('model')}")
         args.append(f" --nhmmer_n_cpu {self.numberOfThreads.get()}")
 
+        program_prefix = (
+            "export CUDA_HOME=$CONDA_PREFIX && "
+            "export PROTENIX_DEVICE=cpu && "
+            "protenix pred"
+        )
+
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
             condaDic=PROTENIX_DIC,
-            program="protenix pred",
+            program=program_prefix,
             cwd=os.path.abspath(Plugin.getVar(PROTENIX_DIC['home']))
         )
+
 
     def extractScoreStep(self):
         """Extract per-residue score and compute mean score per model"""
@@ -417,30 +424,13 @@ class ProtProtenix(EMProtocol):
 
     def _buildProtenixEntity(self, entityType, sequence, chainId):
         entityType = entityType.lower()
-
+        if not sequence:
+            sequence = "X"  # placeholder sequence to avoid empty
         if entityType == "protein":
-            return {
-                "proteinChain": {
-                    "sequence": sequence,
-                    "count": 1,
-                    "id": [chainId]
-                }
-            }
-
+            return {"proteinChain": {"id": chainId, "sequence": sequence}}
         elif entityType == "dna":
-            return {
-                "dnaSequence": {
-                    "sequence": sequence,
-                    "count": 1,
-                    "id": [chainId]
-                }
-            }
-
+            return {"dnaSequence": {"id": chainId, "sequence": sequence}}
         elif entityType == "rna":
-            return {
-                "rnaSequence": {
-                    "sequence": sequence,
-                    "count": 1,
-                    "id": [chainId]
-                }
-            }
+            return {"rnaSequence": {"id": chainId, "sequence": sequence}}
+        else:
+            return {"proteinChain": {"id": chainId, "sequence": sequence}}

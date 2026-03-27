@@ -57,7 +57,11 @@ SelectResidueWizardQT().addTarget(protocol=ProtChai,
                                   inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
                                           'inpChain'],
                                   outputs=['inpPositions'])
-
+SelectChainWizardQT().addTarget(protocol=ProtProtenix,
+                                targets=['inpChain'],
+                                inputs=[{'inputOrigin': ['inputSequence',
+                                                         'inputAtomStruct']}],
+                                outputs=['inpChain'])
 SelectResidueWizardQT().addTarget(protocol=ProtProtenix,
                                   targets=['inpPositions'],
                                   inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},

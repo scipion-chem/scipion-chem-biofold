@@ -92,7 +92,7 @@ class TestBoltz(BaseTest):
         )
 
         self.launchProtocol(protBoltz)
-        best = getattr(protBoltz, 'outputAtomStruct', None)
+        best = getattr(protBoltz, 'outputBestAtomStruct', None)
         self.assertIsNotNone(best)
 
     def test(self):
