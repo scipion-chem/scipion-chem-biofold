@@ -220,7 +220,7 @@ class ProtBoltz(EMProtocol):
                         label='Recycling steps: ', help="Number of recycling steps for prediction.")
         group.addParam('samplingSteps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
-        group.addParam('diffusionSamples', params.IntParam, default=1,
+        group.addParam('diffusionSamples', params.IntParam, default=5,
                         label='Output models: ', help="Number of output models for prediction.")
         group.addParam('stepScale', params.FloatParam, default=1.638,
                         label='Steps size: ', help="Number of step size. Its related to the temperature at which the diffusion process samples the distribution.")
