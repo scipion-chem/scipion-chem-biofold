@@ -49,7 +49,7 @@ class ProtProtenix(EMProtocol):
        #todo
     """
     _label = 'protenix modelling'
-    models = ['protenix_base_default_v1.0.0', 'protenix_base_20250630_v1.0.0', 'protenix_base_default_v0.5.0']
+    models = ['protenix-v2','protenix_base_default_v1.0.0', 'protenix_base_20250630_v1.0.0', 'protenix_base_default_v0.5.0']
 
     # -------------------------- DEFINE param functions ----------------------
     def _addInputForm(self, form):
@@ -98,13 +98,12 @@ class ProtProtenix(EMProtocol):
                       label='Sequence file: ',
                       help='Select the fasta file.')
 
-
         group = form.addGroup('Parameters')
         group.addParam('msa', params.BooleanParam, default=True,
                       label="Run with MSAs: ",
                       help='Choose whether to run with MSAs for improved performance.')
         group.addParam('sample', params.IntParam, default=5,
-                      label='Diffusion samples for affinity: ', help="Number of diffusion samples for affinity.")
+                       label='Output models: ', help="Number of output models for prediction.")
         group.addParam('steps', params.IntParam, default=200,
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
         group.addParam('model', params.EnumParam, default=0, choices=self.models,
@@ -124,8 +123,8 @@ class ProtProtenix(EMProtocol):
             self._insertFunctionStep(self.createProtenixInputFileStep)
 
         self._insertFunctionStep(self.runProtenixStep)
-        #self._insertFunctionStep(self.extractScoreStep)
-        #self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.extractScoreStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def createProtenixJsonFromFastaStep(self):
         fastaPath = os.path.abspath(self.file.get())
@@ -161,26 +160,24 @@ class ProtProtenix(EMProtocol):
             if not inputLine.strip():
                 continue
 
-            inpJson = json.loads(inputLine.split(')')[1].strip())
-            seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
-            _, sequence = next(iter(seqDic.items()))
+            # Parsing the Scipion input list format
+            try:
+                # Assuming input format: "(label) {json_content}"
+                inpJson = json.loads(inputLine.split(')')[1].strip())
+                seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
+                _, sequence = next(iter(seqDic.items()))
 
-            entityType = inpJson.get('entity', 'protein')
-            chainId = next(chainIdIter)
+                # Get entity type from the form selection
+                entityType = self.getEnumText('entityType').lower()
+                chainId = next(chainIdIter)
 
-            sequences.append(
-                self._buildProtenixEntity(entityType, sequence, chainId)
-            )
+                sequences.append(
+                    self._buildProtenixEntity(entityType, sequence, chainId)
+                )
+            except Exception as e:
+                print(f"Error parsing input line: {e}")
 
-        jsonPath = os.path.abspath(self._getPath("protenix_input.json"))
-
-        with open(jsonPath, "w") as f:
-            json.dump([
-                {
-                    "name": "intellifold_job",
-                    "sequences": sequences
-                }
-            ], f, indent=2)
+        self._writeJson(sequences)
 
     def runProtenixStep(self):
         jsonPath = os.path.abspath(self._getPath("protenix_input.json"))
@@ -200,7 +197,9 @@ class ProtProtenix(EMProtocol):
 
         program_prefix = (
             "export CUDA_HOME=$CONDA_PREFIX && "
-            "export PROTENIX_DEVICE=cpu && "
+            "export CPATH=$CONDA_PREFIX/targets/x86_64-linux/include:$CPATH && "
+            "export LD_LIBRARY_PATH=$CONDA_PREFIX/targets/x86_64-linux/lib:$LD_LIBRARY_PATH && "
+            f"export PROTENIX_ROOT_DIR={Plugin.getVar(PROTENIX_DIC['home'])} &&"
             "protenix pred"
         )
 
@@ -212,71 +211,58 @@ class ProtProtenix(EMProtocol):
             cwd=os.path.abspath(Plugin.getVar(PROTENIX_DIC['home']))
         )
 
-
     def extractScoreStep(self):
-        """Extract per-residue score and compute mean score per model"""
-        resultsPath = os.path.join(os.path.abspath(self._getPath()), "chai_results")
+        """Extract ranking scores from the confidence JSON files"""
         self.meanScore = {}
+        resultsPath = os.path.join(self._getPath(), "protenix_results")
 
-        extraFiles = self.getExtraFiles()
+        for root, _, files in os.walk(resultsPath):
+            for name in files:
+                if "summary_confidence_sample_" in name and name.endswith(".json"):
+                    sampleIdx = name.split('_')[-1].split('.')[0]
+                    jsonPath = os.path.join(root, name)
 
-        for cifPath in extraFiles:
-            cifName = os.path.basename(cifPath)
-            modelName = os.path.splitext(cifName)[0]
+                    with open(jsonPath, 'r') as f:
+                        data = json.load(f)
+                        score = data.get("ranking_score", 0.0)
 
-            headers = []
-            scoreValues = []
-            seenResidues = set()
-
-            with open(cifPath) as f:
-                for line in f:
-                    if line.startswith('_atom_site.'):
-                        headers.append(line.strip())
-                    elif line.startswith('ATOM'):
-                        break
-
-            colIndex = {h.split('.')[-1]: i for i, h in enumerate(headers)}
-
-            if 'B_iso_or_equiv' not in colIndex:
-                raise Exception(f"No score field in {cifName}")
-
-            with open(cifPath) as f:
-                for line in f:
-                    if not line.startswith('ATOM'):
-                        continue
-                    cols = re.sub(r'\s+', ' ', line.strip()).split()
-                    resnum = int(cols[colIndex['auth_seq_id']])
-                    score = float(cols[colIndex['B_iso_or_equiv']])
-                    if resnum not in seenResidues:
-                        seenResidues.add(resnum)
-                        scoreValues.append(score)
-
-            self.meanScore[modelName] = sum(scoreValues) / len(scoreValues)
+                    modelName = f"protenix_job_sample_{sampleIdx}"
+                    self.meanScore[modelName] = score
 
         self.bestModel = max(self.meanScore, key=self.meanScore.get)
 
+        scoreFile = self._getExtraPath("protenix_scores.txt")
+        with open(scoreFile, "w") as f:
+            f.write(f"Best Model: {self.bestModel}\n")
+            f.write("-" * 30 + "\n")
+            for model, score in sorted(self.meanScore.items()):
+                f.write(f"{model}: {score:.4f}\n")
+
     def createOutputStep(self):
-        extraFiles = self.getExtraFiles()
+        extraFiles = self.getExtraFiles()  # This now searches recursively
         outputSet = SetOfAtomStructs.create(self._getPath())
 
         bestSrc = None
 
         for cifPath in extraFiles:
+            modelName = os.path.splitext(os.path.basename(cifPath))[0]
+
             atomStruct = AtomStruct(filename=cifPath)
-            atomStruct.origin = String()
-            atomStruct.setAttributeValue('origin', 'Chai')
+            atomStruct.origin = String('Protenix')
+            # Set the score we found in the previous step
+            score = self.meanScore.get(modelName, 0.0)
+            atomStruct.setAttributeValue('score', score)
+
             outputSet.append(atomStruct)
 
-            modelName = os.path.splitext(os.path.basename(cifPath))[0]
             if modelName == self.bestModel:
                 bestSrc = cifPath
 
         if bestSrc is None:
-            raise Exception(f"Best model {self.bestModel} not found among output files.")
+            raise Exception(f"Best model {self.bestModel} not found among CIF files.")
 
         bestStruct = AtomStruct(filename=bestSrc)
-        bestStruct.origin = String()
-        bestStruct.setAttributeValue('origin', 'Chai')
+        bestStruct.origin = String('Protenix')
 
         self._defineOutputs(
             outputBestAtomStruct=bestStruct,
@@ -286,46 +272,13 @@ class ProtProtenix(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
+        scoreFile = self._getExtraPath("protenix_scores.txt")
 
-        resultsPath = os.path.join(os.path.abspath(self._getPath()), "chai_results")
-
-        try:
-            extraFiles = self.getExtraFiles()
-        except Exception as e:
-            summary.append(f"No CIF files found in {resultsPath}: {e}")
-            return summary
-
-        if not extraFiles:
-            summary.append(f"No CIF files found in {resultsPath}.")
-            return summary
-
-        scores = {}
-        logFile = os.path.join(self._getPath('logs'), "run.stdout")
-
-        if os.path.exists(logFile):
-            with open(logFile) as f:
-                for line in f:
-                    m = re.search(r"Score=([\d.]+), writing output to (.+\.cif)", line)
-                    if m:
-                        score = float(m.group(1))
-                        cifPath = m.group(2)
-
-                        relPath = os.path.relpath(cifPath, resultsPath)
-                        modelName = os.path.splitext(relPath)[0]
-
-                        scores[modelName] = score
-
-        if not scores:
-            summary.append("No scores detected in log file.")
-            return summary
-
-        summary.append("Scores per model:")
-
-        for modelName in sorted(scores.keys()):
-            summary.append(f"  {modelName}: {scores[modelName]:.4f}")
-
-        bestModel = max(scores, key=scores.get)
-        summary.append(f"\nBest structure (highest score): {bestModel}.cif")
+        if os.path.exists(scoreFile):
+            with open(scoreFile, "r") as f:
+                lines = f.readlines()
+                for line in lines:
+                    summary.append(line.strip())
 
         return summary
 
@@ -343,38 +296,92 @@ class ProtProtenix(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def getExtraFiles(self):
+        """Recursively find all .cif files in the protenix_results folder"""
         extraFiles = []
-        resultsPath = os.path.join(os.path.abspath(self._getPath()), "chai_results")
+        resultsPath = os.path.join(self._getPath(), "protenix_results")
 
-        for root, dirs, files in os.walk(resultsPath):
+        if not os.path.exists(resultsPath):
+            raise Exception(f"Results path does not exist: {resultsPath}")
+
+        for root, _, files in os.walk(resultsPath):
             for name in files:
-                if name.lower().endswith(".cif"):
+                # We only want the sample models, not other metadata CIFs
+                if name.lower().endswith(".cif") and "_sample_" in name:
                     extraFiles.append(os.path.join(root, name))
 
         if not extraFiles:
-            raise Exception("No CIF files found in chai_results.")
+            raise Exception("No model CIF files found in protenix_results.")
 
         return extraFiles
 
     def guessEntityType(self, sequence):
-        seq = sequence.upper()
-        dnaLetters = set("ACGT")
-        rnaLetters = set("ACGU")
-        proteinLetters = set("ACDEFGHIKLMNPQRSTVWY")
+        """ Guess if a sequence is DNA, RNA or Protein """
+        sequence = sequence.upper().strip()
+        # DNA: only A, T, G, C, N
+        if re.fullmatch(r'[ATGCN]+', sequence):
+            return 'dna'
+        # RNA: only A, U, G, C, N
+        if re.fullmatch(r'[AUGCN]+', sequence):
+            return 'rna'
+        return 'protein'
 
-        seqSet = set(seq)
+    def _buildProtenixEntity(self, entityType, sequence, chainId):
+        """ Build the dictionary for a single entity following Protenix 2.0 schema """
+        # 1. Clean sequence and handle the 'X' crash issue
+        # We replace X with A because the Protenix engine fails on unknown residues
+        sequence = "".join(sequence.split()).upper().replace('X', 'A')
 
-        # check for RNA (U present, T absent)
-        if "U" in seqSet and "T" not in seqSet:
-            return "rna"
-        # check for DNA (T present, U absent)
-        elif "T" in seqSet and "U" not in seqSet and seqSet <= dnaLetters:
-            return "dna"
-        # check for protein: contains amino acid letters not in DNA/RNA
-        elif seqSet <= proteinLetters:
-            return "protein"
+        if not sequence:
+            sequence = "A"  # minimal fallback
+
+        entityType = entityType.lower()
+
+        inner_data = {
+            "sequence": sequence,
+            "count": 1,
+            "id": [str(chainId)]
+        }
+
+        # 3. Use the specific Protenix keys
+        if entityType == "protein":
+            return {"proteinChain": inner_data}
+        elif entityType == "dna":
+            return {"dnaSequence": inner_data}
+        elif entityType == "rna":
+            return {"rnaSequence": inner_data}
         else:
-            return "protein"
+            return {"proteinChain": inner_data}
+
+    def _writeJson(self, sequences):
+        """ Helper to write the final JSON list structure with correct indentation """
+        jsonPath = os.path.abspath(self._getPath("protenix_input.json"))
+
+        # The top level must be a list []
+        job_data = [
+            {
+                "name": "protenix_job",
+                "sequences": sequences
+            }
+        ]
+
+        with open(jsonPath, "w") as f:
+            json.dump(job_data, f, indent=2)
+
+    def createProtenixJsonFromFastaStep(self):
+        fastaPath = os.path.abspath(self.file.get())
+        seqDic = parseFasta(fastaPath)
+
+        chainIdIter = iter(string.ascii_uppercase)
+        sequences = []
+
+        for _, sequence in seqDic.items():
+            chainId = next(chainIdIter)
+            entityType = self.guessEntityType(sequence)
+            sequences.append(
+                self._buildProtenixEntity(entityType, sequence, chainId)
+            )
+
+        self._writeJson(sequences)
 
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
@@ -422,15 +429,3 @@ class ProtProtenix(EMProtocol):
         for i in range(0, len(sequence), 80):
             fixedLines.append(sequence[i:i + 80] + "\n")
 
-    def _buildProtenixEntity(self, entityType, sequence, chainId):
-        entityType = entityType.lower()
-        if not sequence:
-            sequence = "X"  # placeholder sequence to avoid empty
-        if entityType == "protein":
-            return {"proteinChain": {"id": chainId, "sequence": sequence}}
-        elif entityType == "dna":
-            return {"dnaSequence": {"id": chainId, "sequence": sequence}}
-        elif entityType == "rna":
-            return {"rnaSequence": {"id": chainId, "sequence": sequence}}
-        else:
-            return {"proteinChain": {"id": chainId, "sequence": sequence}}

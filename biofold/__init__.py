@@ -28,6 +28,7 @@ from scipion.install.funcs import InstallHelper
 
 from pwchem import Plugin as pwchemPlugin
 from .constants import *
+import os
 
 _references = ['']
 
@@ -131,17 +132,29 @@ class Plugin(pwchemPlugin):
             packageVersion=PROTENIX_DIC['version']
         )
 
+        pkgHome = cls.getVar(PROTENIX_DIC['home'])
+        commonDir = os.path.join(pkgHome, "common")
+
         installer.getCondaEnvCommand(
             PROTENIX_DIC['name'],
             binaryVersion=PROTENIX_DIC['version'],
             pythonVersion='3.11'
         ).addCommand(
             f"{cls.getEnvActivationCommand(PROTENIX_DIC)} && "
-            "conda install -c nvidia cuda-toolkit -y && "
+            "pip install protenix==2.0.0 && "
+            "conda install -y -c nvidia cuda-nvcc cuda-toolkit && "
+            f"mkdir -p {commonDir} && "
+            f"wget -P {commonDir} https://files.wwpdb.org/pub/pdb/data/monomers/components.cif && "
+            f"python -c \"import pickle; from rdkit import Chem; from protenix.data.core.ccd import biotite_load_ccd_cif; print('Processing CCD... this takes a minute'); " 
+            f"from protenix.data.core.ccd import get_all_ccd_code;\" && "
+            "export PATH=$CONDA_PREFIX/bin:$PATH && "
             "export CUDA_HOME=$CONDA_PREFIX && "
-            "pip install protenix",
+            "export CPATH=$CONDA_PREFIX/include:$CPATH && "
+            "export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH && "
+            f"touch {pkgHome}/{PROTENIX_DIC['name']}_installed",
             f"{PROTENIX_DIC['name']}_installed"
         )
+
 
         installer.addPackage(
             env,

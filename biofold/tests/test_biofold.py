@@ -26,7 +26,7 @@
 import subprocess
 import unittest
 
-from biofold.protocols import ProtChai, ProtBoltz, ProtIntelliFold
+from biofold.protocols import ProtChai, ProtBoltz, ProtIntelliFold, ProtProtenix
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 
 
@@ -94,6 +94,8 @@ class TestBoltz(BaseTest):
         self.launchProtocol(protBoltz)
         best = getattr(protBoltz, 'outputBestAtomStruct', None)
         self.assertIsNotNone(best)
+        all = getattr(protBoltz, 'outputSetOfAtomStructs', None)
+        self.assertIsNotNone(all)
 
     def test(self):
         self._runBoltz()
@@ -123,6 +125,33 @@ class TestIntelliFold(BaseTest):
 
     def test(self):
         self._runIntelliFold()
+
+class TestProtenix(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
+
+        setupTestProject(cls)
+
+    def _runProtenix(self):
+        protProtenix = self.newProtocol(
+            ProtProtenix,
+            inputOrigin=2,
+            entityType=1,
+            recyclingSteps=1,
+            samplingSteps=50,
+            file=self.ds.getFile('Sequences/3lqd_B_mutated.fasta'),
+            model=1
+        )
+
+        self.launchProtocol(protProtenix)
+        best = getattr(protProtenix, 'outputBestAtomStruct', None)
+        self.assertIsNotNone(best)
+        all = getattr(protProtenix, 'outputSetOfAtomStructs', None)
+        self.assertIsNotNone(all)
+
+    def test(self):
+        self._runProtenix()
 
 
 
