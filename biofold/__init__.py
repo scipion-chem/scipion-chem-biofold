@@ -28,6 +28,7 @@ from scipion.install.funcs import InstallHelper
 
 from pwchem import Plugin as pwchemPlugin
 from .constants import *
+import os
 
 _references = ['']
 
@@ -38,6 +39,7 @@ class Plugin(pwchemPlugin):
         cls.addBoltzPackage(env)
         cls.addChaiPackage(env)
         cls.addIntelliFoldPackage(env)
+        cls.addProtenixPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -46,6 +48,7 @@ class Plugin(pwchemPlugin):
         cls._defineEmVar(BOLTZ_DIC['home'], cls.getEnvName(BOLTZ_DIC))
         cls._defineEmVar(CHAI_DIC['home'], cls.getEnvName(CHAI_DIC))
         cls._defineEmVar(INTELLIFOLD_DIC['home'], cls.getEnvName(INTELLIFOLD_DIC))
+        cls._defineEmVar(PROTENIX_DIC['home'], cls.getEnvName(PROTENIX_DIC))
 
     @classmethod
     def addBoltzPackage(cls, env, default=True):
@@ -114,6 +117,44 @@ class Plugin(pwchemPlugin):
             "pip install chai_lab==0.6.1",
             f"{CHAI_DIC['name']}_installed"
         )
+
+        installer.addPackage(
+            env,
+            dependencies=['conda', 'pip', 'git'],
+            default=default
+        )
+
+    @classmethod
+    def addProtenixPackage(cls, env, default=True):
+        installer = InstallHelper(
+            PROTENIX_DIC['name'],
+            packageHome=cls.getVar(PROTENIX_DIC['home']),
+            packageVersion=PROTENIX_DIC['version']
+        )
+
+        pkgHome = cls.getVar(PROTENIX_DIC['home'])
+        commonDir = os.path.join(pkgHome, "common")
+
+        installer.getCondaEnvCommand(
+            PROTENIX_DIC['name'],
+            binaryVersion=PROTENIX_DIC['version'],
+            pythonVersion='3.11'
+        ).addCommand(
+            f"{cls.getEnvActivationCommand(PROTENIX_DIC)} && "
+            "pip install protenix==2.0.0 && "
+            "conda install -y -c nvidia cuda-nvcc cuda-toolkit && "
+            f"mkdir -p {commonDir} && "
+            f"wget -P {commonDir} https://files.wwpdb.org/pub/pdb/data/monomers/components.cif && "
+            f"python -c \"import pickle; from rdkit import Chem; from protenix.data.core.ccd import biotite_load_ccd_cif; print('Processing CCD... this takes a minute'); " 
+            f"from protenix.data.core.ccd import get_all_ccd_code;\" && "
+            "export PATH=$CONDA_PREFIX/bin:$PATH && "
+            "export CUDA_HOME=$CONDA_PREFIX && "
+            "export CPATH=$CONDA_PREFIX/include:$CPATH && "
+            "export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH && "
+            f"touch {pkgHome}/{PROTENIX_DIC['name']}_installed",
+            f"{PROTENIX_DIC['name']}_installed"
+        )
+
 
         installer.addPackage(
             env,

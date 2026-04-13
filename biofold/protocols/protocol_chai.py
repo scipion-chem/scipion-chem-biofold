@@ -212,8 +212,8 @@ class ProtChai(EMProtocol):
                         label='Sampling steps: ', help="Number of sampling steps for prediction.")
         form.addParam('trunkSamples', params.IntParam, default=1, expertLevel=params.LEVEL_ADVANCED,
                         label='Trunk samples: ', help="Number of trunk samples for prediction.")
-        form.addParam('diffNsamples', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
-                       label='Difussion samples for affinity: ', help="Number of diffusion samples for affinity.")
+        form.addParam('diffNsamples', params.IntParam, default=5,
+                       label='Output models: ', help="Number of output models for prediction.")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
