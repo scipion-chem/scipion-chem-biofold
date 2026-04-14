@@ -234,15 +234,12 @@ class ProtProtenix(EMProtocol):
             if not inputLine.strip():
                 continue
 
-            # Parsing the Scipion input list format
             try:
-                # Assuming input format: "(label) {json_content}"
                 inpJson = json.loads(inputLine.split(')')[1].strip())
                 seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
                 _, sequence = next(iter(seqDic.items()))
 
-                # Get entity type from the form selection
-                entityType = self.getEnumText('entityType').lower()
+                entityType = inpJson.get('entity', None)
                 chainId = next(chainIdIter)
 
                 sequences.append(
@@ -400,13 +397,7 @@ class ProtProtenix(EMProtocol):
         return 'protein'
 
     def _buildProtenixEntity(self, entityType, sequence, chainId):
-        """ Build the dictionary for a single entity following Protenix 2.0 schema """
-        # 1. Clean sequence and handle the 'X' crash issue
-        # We replace X with A because the Protenix engine fails on unknown residues
         sequence = "".join(sequence.split()).upper().replace('X', 'A')
-
-        if not sequence:
-            sequence = "A"  # minimal fallback
 
         entityType = entityType.lower()
 
