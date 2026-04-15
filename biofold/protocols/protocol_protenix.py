@@ -388,16 +388,19 @@ class ProtProtenix(EMProtocol):
     def guessEntityType(self, sequence):
         """ Guess if a sequence is DNA, RNA or Protein """
         sequence = sequence.upper().strip()
-        # DNA: only A, T, G, C, N
-        if re.fullmatch(r'[ATGCN]+', sequence):
-            return 'dna'
-        # RNA: only A, U, G, C, N
-        if re.fullmatch(r'[AUGCN]+', sequence):
+
+        protein_only = re.compile(r'[DEFHIKLMPQRVWY]')
+
+        if protein_only.search(sequence):
+            return 'protein'
+
+        if 'U' in sequence:
             return 'rna'
-        return 'protein'
+
+        return 'dna'
 
     def _buildProtenixEntity(self, entityType, sequence, chainId):
-        sequence = "".join(sequence.split()).upper().replace('X', 'A')
+        sequence = "".join(sequence.split()).upper()
 
         entityType = entityType.lower()
 

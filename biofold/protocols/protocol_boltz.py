@@ -25,6 +25,7 @@
 # **************************************************************************
 import json
 import string
+import re
 
 import os
 import pyworkflow.protocol.params as params
@@ -485,22 +486,16 @@ class ProtBoltz(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def guessEntityType(self, sequence):
-        seq = sequence.upper()
-        dnaLetters = set("ACGT")
-        rnaLetters = set("ACGU")
-        proteinLetters = set("ACDEFGHIKLMNPQRSTVWY")
+        """ Guess if a sequence is DNA, RNA or Protein """
+        sequence = sequence.upper().strip()
 
-        seqSet = set(seq)
+        protein_only = re.compile(r'[DEFHIKLMPQRVWY]')
 
-        # check for RNA (U present, T absent)
-        if "U" in seqSet and "T" not in seqSet:
-            return "rna"
-        # check for DNA (T present, U absent)
-        elif "T" in seqSet and "U" not in seqSet and seqSet <= dnaLetters:
-            return "dna"
-        # check for protein: contains amino acid letters not in DNA/RNA
-        elif seqSet <= proteinLetters:
-            return "protein"
-        else:
-            return "protein"
+        if protein_only.search(sequence):
+            return 'protein'
+
+        if 'U' in sequence:
+            return 'rna'
+
+        return 'dna'
 

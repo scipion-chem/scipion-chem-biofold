@@ -432,24 +432,18 @@ class ProtChai(EMProtocol):
         return extraFiles
 
     def guessEntityType(self, sequence):
-        seq = sequence.upper()
-        dnaLetters = set("ACGT")
-        rnaLetters = set("ACGU")
-        proteinLetters = set("ACDEFGHIKLMNPQRSTVWY")
+        """ Guess if a sequence is DNA, RNA or Protein """
+        sequence = sequence.upper().strip()
 
-        seqSet = set(seq)
+        protein_only = re.compile(r'[DEFHIKLMPQRVWY]')
 
-        # check for RNA (U present, T absent)
-        if "U" in seqSet and "T" not in seqSet:
-            return "rna"
-        # check for DNA (T present, U absent)
-        elif "T" in seqSet and "U" not in seqSet and seqSet <= dnaLetters:
-            return "dna"
-        # check for protein: contains amino acid letters not in DNA/RNA
-        elif seqSet <= proteinLetters:
-            return "protein"
-        else:
-            return "protein"
+        if protein_only.search(sequence):
+            return 'protein'
+
+        if 'U' in sequence:
+            return 'rna'
+
+        return 'dna'
 
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
@@ -463,7 +457,6 @@ class ProtChai(EMProtocol):
         sequenceBuffer = ""
         currentHeader = None
 
-
         for line in lines:
             line = line.rstrip("\n")
             if line.startswith(">"):
@@ -473,13 +466,20 @@ class ProtChai(EMProtocol):
                     counter += 1
 
                 header = line[1:]
+                # If it's already a Scipion-style header, take the name part
                 if "|name=" in header:
                     header = header.split("|name=")[-1]
+
+                # SANITIZATION: Chai-1 only allows one '|' to separate type and name.
+                # We replace all non-alphanumeric chars (including extra pipes) with underscores.
+                header = re.sub(r'[^a-zA-Z0-9_-]', '_', header)
+
                 currentHeader = header
                 sequenceBuffer = ""
             else:
                 sequenceBuffer += line.strip()
 
+        # Handle the last sequence in the file
         if currentHeader is not None:
             entityType = self.guessEntityType(sequenceBuffer)
             self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
@@ -491,8 +491,14 @@ class ProtChai(EMProtocol):
         self.NEWFILE = True
 
     def writeSequence(self, entityType, header, sequence, counter, fixedLines):
-        if not header:
-            header = f"seq{counter}"
-        fixedLines.append(f">{entityType}|{header}\n")
+        # Ensure header isn't empty after sanitization
+        clean_header = header.strip('_')
+        if not clean_header:
+            clean_header = f"seq{counter}"
+
+        # Chai-1 format: >protein|name_of_entity
+        fixedLines.append(f">{entityType}|{clean_header}\n")
+
+        # Wrap sequence at 80 chars
         for i in range(0, len(sequence), 80):
             fixedLines.append(sequence[i:i + 80] + "\n")
