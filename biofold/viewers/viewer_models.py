@@ -22,6 +22,8 @@ class ProtImportViewer(Viewer):
                 if fileName.endswith(".cif") or fileName.endswith(".pdb"):
                     f.write(f"open {fileName}\n")
                     f.write("color bfactor palette alphafold\n")
+                    f.write("hide atoms\n")
+                    f.write("ribbon #1-10")
 
         # Run Chimera with the generated command file
         Chimera.runProgram(Chimera.getProgram(), fnCmd + "&")
