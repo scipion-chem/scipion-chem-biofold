@@ -67,6 +67,16 @@ SelectResidueWizardQT().addTarget(protocol=ProtProtenix,
                                   inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
                                           'inpChain'],
                                   outputs=['inpPositions'])
+SelectChainWizardQT().addTarget(protocol=ProtIntelliFold,
+                                targets=['inpChain'],
+                                inputs=[{'inputOrigin': ['inputSequence',
+                                                         'inputAtomStruct']}],
+                                outputs=['inpChain'])
+SelectResidueWizardQT().addTarget(protocol=ProtIntelliFold,
+                                  targets=['inpPositions'],
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
+                                          'inpChain'],
+                                  outputs=['inpPositions'])
 
 class AddSequenceWizardBoltz(SelectResidueWizard):
     _targets, _inputs, _outputs = [], {}, {}
