@@ -39,6 +39,7 @@ from biofold.constants import INTELLIFOLD_DIC
 from pwem.objects import AtomStruct, SetOfAtomStructs
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 from pwchem.utils.utilsFasta import parseFasta
+from .protocol_chai import ProtChai
 
 
 
@@ -171,32 +172,7 @@ class ProtIntelliFold(EMProtocol):
     protSeq = ProtDefineSetOfSequences()
 
     # -------------------------- DEFINE param functions ----------------------
-    def _addInputForm(self, form):
-        form.addParam('inputSequence', params.PointerParam,
-                      pointerClass='Sequence', allowsNull=True,
-                      label="Input sequence: ", condition='inputOrigin==0',
-                      help='Select the sequence object to add to the set')
 
-        form.addParam('inputAtomStruct', params.PointerParam,
-                      pointerClass='AtomStruct', allowsNull=True,
-                      label="Input structure: ", condition='inputOrigin==1',
-                      help='Select the AtomStruct object whose sequence to add to the set')
-
-        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin != 2',
-                      label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
-                      help='Input entity type to add to the set')
-
-        form.addParam('inpChain', params.StringParam,
-                      label='Input chain: ', condition='inputOrigin == 1',
-                      help='Specify the protein chain to use as sequence.')
-
-        form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 2',
-                      label='Input positions: ',
-                      help='Specify the positions of the sequence to add in the output.')
-
-        form.addParam('addInput', params.LabelParam, condition='inputOrigin != 2',
-                      label='Add input: ',
-                      help='Add sequence to the output set')
 
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
@@ -207,7 +183,7 @@ class ProtIntelliFold(EMProtocol):
         form.addParam('inputOrigin', params.EnumParam, default=0,
                        label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
                        help='Input origin to add to the set')
-        self._addInputForm(form)
+        ProtChai._addInputForm(form)
 
         form.addParam('inputList', params.TextParam, width=100, condition='inputOrigin in [0,1]',
                       default='', label='List of inputs: ',

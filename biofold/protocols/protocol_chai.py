@@ -155,6 +155,7 @@ class ProtChai(EMProtocol):
     NEWFILE = False
 
     # -------------------------- DEFINE param functions ----------------------
+    @classmethod
     def _addInputForm(self, form):
         form.addParam('inputSequence', params.PointerParam,
                       pointerClass='Sequence', allowsNull=True,

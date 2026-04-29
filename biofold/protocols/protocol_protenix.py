@@ -38,6 +38,7 @@ from biofold.constants import PROTENIX_DIC
 
 from pwem.objects import  AtomStruct, SetOfAtomStructs
 from pwchem.utils.utilsFasta import parseFasta
+from .protocol_chai import ProtChai
 
 
 class ProtProtenix(EMProtocol):
@@ -126,32 +127,7 @@ class ProtProtenix(EMProtocol):
     models = ['protenix-v2','protenix_base_default_v1.0.0', 'protenix_base_20250630_v1.0.0', 'protenix_base_default_v0.5.0']
 
     # -------------------------- DEFINE param functions ----------------------
-    def _addInputForm(self, form):
-        form.addParam('inputSequence', params.PointerParam,
-                      pointerClass='Sequence', allowsNull=True,
-                      label="Input sequence: ", condition='inputOrigin==0',
-                      help='Select the sequence object to add to the set')
 
-        form.addParam('inputAtomStruct', params.PointerParam,
-                      pointerClass='AtomStruct', allowsNull=True,
-                      label="Input structure: ", condition='inputOrigin==1',
-                      help='Select the AtomStruct object whose sequence to add to the set')
-
-        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin in [0,1]',
-                      label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
-                      help='Input entity type to add to the set')
-
-        form.addParam('inpChain', params.StringParam,
-                      label='Input chain: ', condition='inputOrigin == 1',
-                      help='Specify the protein chain to use as sequence.')
-
-        form.addParam('inpPositions', params.StringParam,
-                      label='Input positions: ', condition='inputOrigin in [0,1]',
-                      help='Specify the positions of the sequence to add in the output.')
-
-        form.addParam('addInput', params.LabelParam,
-                      label='Add input: ', condition='inputOrigin in [0,1]',
-                      help='Add sequence to the output set')
 
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
@@ -162,7 +138,7 @@ class ProtProtenix(EMProtocol):
         form.addParam('inputOrigin', params.EnumParam, default=0,
                       label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
                       help='Input origin to add to the set')
-        self._addInputForm(form)
+        ProtChai._addInputForm(form)
 
         form.addParam('inputList', params.TextParam, width=100, condition='inputOrigin in [0,1]',
                       default='', label='List of inputs: ',
