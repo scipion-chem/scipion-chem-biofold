@@ -172,8 +172,6 @@ class ProtIntelliFold(EMProtocol):
     protSeq = ProtDefineSetOfSequences()
 
     # -------------------------- DEFINE param functions ----------------------
-
-
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         Params:
@@ -181,7 +179,7 @@ class ProtIntelliFold(EMProtocol):
         """
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                       label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
+                      label='Input origin: ', choices=['Sequence', 'SetOfSequences', 'AtomStruct', 'fasta file'],
                        help='Input origin to add to the set')
         ProtChai._addInputForm(form)
 

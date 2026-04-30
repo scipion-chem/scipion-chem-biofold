@@ -37,6 +37,7 @@ from pwchem import Plugin
 from biofold.constants import BOLTZ_DIC
 
 from pwem.objects import  AtomStruct, SetOfAtomStructs
+from pwem.objects import Sequence, SetOfSequences
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 from pwchem.utils.utilsFasta import parseFasta
 
@@ -159,20 +160,28 @@ class ProtBoltz(EMProtocol):
                       label="Input sequence: ", condition='inputOrigin==0',
                       help='Select the sequence object to add to the set')
 
+        form.addParam('inputSetOfSequences', params.PointerParam,
+                      pointerClass='SetOfSequences', allowsNull=True,
+                      label="Input set of sequences: ", condition='inputOrigin==1',
+                      help='Select the sequence set to select the sequence from.')
+        form.addParam('inputSequenceFromSet', params.StringParam, allowsNull=True,
+                      label="Input sequence: ", condition='inputOrigin==1',
+                      help='Select the sequence object to add to the set')
+
         form.addParam('inputAtomStruct', params.PointerParam,
                       pointerClass='AtomStruct', allowsNull=True,
-                      label="Input structure: ", condition='inputOrigin==1',
+                      label="Input structure: ", condition='inputOrigin==2',
                       help='Select the AtomStruct object whose sequence to add to the set')
 
-        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin != 2',
+        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin != 3',
                       label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
                       help='Input entity type to add to the set')
 
         form.addParam('inpChain', params.StringParam,
-                      label='Input chain: ', condition='inputOrigin == 1',
+                      label='Input chain: ', condition='inputOrigin == 2',
                       help='Specify the protein chain to use as sequence.')
 
-        form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 2',
+        form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 3',
                       label='Input positions: ',
                       help='Specify the positions of the sequence to add in the output.')
 
@@ -180,7 +189,7 @@ class ProtBoltz(EMProtocol):
                       label="Cyclic: ",
                       help='Choose whether the input is cyclic or not.')
 
-        form.addParam('addInput', params.LabelParam, condition='inputOrigin != 2',
+        form.addParam('addInput', params.LabelParam, condition='inputOrigin != 3',
                       label='Add input: ',
                       help='Add sequence to the output set')
 
@@ -200,7 +209,7 @@ class ProtBoltz(EMProtocol):
 
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                       label='Input origin: ', choices=['Sequence', 'AtomStruct', 'fasta file'],
+                       label='Input origin: ', choices=['Sequence','SetOfSequences','AtomStruct', 'fasta file'],
                        help='Input origin to add to the set')
         self._addInputForm(form)
 

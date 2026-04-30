@@ -32,51 +32,71 @@ from pwem.objects import AtomStruct, Sequence
 from pwem.wizards import SelectResidueWizard
 from pyworkflow.object import Pointer
 
-from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT
+from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, SelectElementWizard
 
 SelectChainWizardQT().addTarget(protocol=ProtBoltz,
                                 targets=['inpChain'],
-                                inputs=[{'inputOrigin': ['inputSequence',
+                                inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet',
                                                          'inputAtomStruct']}],
                                 outputs=['inpChain'])
 
 SelectResidueWizardQT().addTarget(protocol=ProtBoltz,
                                   targets=['inpPositions'],
-                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet', 'inputAtomStruct']},
                                           'inpChain'],
                                   outputs=['inpPositions'])
 
 SelectChainWizardQT().addTarget(protocol=ProtChai,
                                 targets=['inpChain'],
-                                inputs=[{'inputOrigin': ['inputSequence',
+                                inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet',
                                                          'inputAtomStruct']}],
                                 outputs=['inpChain'])
 
 SelectResidueWizardQT().addTarget(protocol=ProtChai,
                                   targets=['inpPositions'],
-                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet', 'inputAtomStruct']},
                                           'inpChain'],
                                   outputs=['inpPositions'])
 SelectChainWizardQT().addTarget(protocol=ProtProtenix,
                                 targets=['inpChain'],
-                                inputs=[{'inputOrigin': ['inputSequence',
+                                inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet',
                                                          'inputAtomStruct']}],
                                 outputs=['inpChain'])
 SelectResidueWizardQT().addTarget(protocol=ProtProtenix,
                                   targets=['inpPositions'],
-                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet', 'inputAtomStruct']},
                                           'inpChain'],
                                   outputs=['inpPositions'])
 SelectChainWizardQT().addTarget(protocol=ProtIntelliFold,
                                 targets=['inpChain'],
-                                inputs=[{'inputOrigin': ['inputSequence',
+                                inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet',
                                                          'inputAtomStruct']}],
                                 outputs=['inpChain'])
 SelectResidueWizardQT().addTarget(protocol=ProtIntelliFold,
                                   targets=['inpPositions'],
-                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet', 'inputAtomStruct']},
                                           'inpChain'],
                                   outputs=['inpPositions'])
+
+SelectElementWizard().addTarget(protocol=ProtBoltz,
+                               targets=['inputSequenceFromSet'],
+                               inputs=['inputSetOfSequences'],
+                               outputs=['inputSequenceFromSet'])
+
+SelectElementWizard().addTarget(protocol=ProtChai,
+                               targets=['inputSequenceFromSet'],
+                               inputs=['inputSetOfSequences'],
+                               outputs=['inputSequenceFromSet'])
+
+SelectElementWizard().addTarget(protocol=ProtIntelliFold,
+                               targets=['inputSequenceFromSet'],
+                               inputs=['inputSetOfSequences'],
+                               outputs=['inputSequenceFromSet'])
+
+SelectElementWizard().addTarget(protocol=ProtProtenix,
+                               targets=['inputSequenceFromSet'],
+                               inputs=['inputSetOfSequences'],
+                               outputs=['inputSequenceFromSet'])
 
 class AddSequenceWizardBoltz(SelectResidueWizard):
     _targets, _inputs, _outputs = [], {}, {}
@@ -87,6 +107,20 @@ class AddSequenceWizardBoltz(SelectResidueWizard):
 
         # StructName
         inputObj = getattr(protocol, inputParams[0]).get()
+        if isinstance(inputObj, str):
+            seqName = inputObj.split('name = ')[1].split(')')[0]
+
+            seqSet = form.protocol.inputSetOfSequences.get()
+            realSeq = None
+
+            for seq in seqSet:
+                if seq.getName() == seqName or seqName in str(seq):
+                    realSeq = seq
+                    break
+            if realSeq is None:
+                raise Exception(f"Sequence {seqName} not found in set")
+            inputObj = realSeq
+
         pdbFile, AS, addPointer = '', False, True
         if issubclass(type(inputObj), str):
             outStr = [inputObj]
@@ -146,12 +180,17 @@ class AddSequenceWizardBoltz(SelectResidueWizard):
 
 AddSequenceWizardBoltz().addTarget(protocol=ProtBoltz,
                               targets=['addInput'],
-                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
-                                      'inpChain', 'inpPositions'],
+                                   inputs=[{'inputOrigin': [
+                                       'inputSequence',
+                                       'inputSequenceFromSet',
+                                       'inputAtomStruct'
+                                   ]},
+                                       'inpChain',
+                                       'inpPositions'],
                               outputs=['inputList', 'inputPointers'])
 
 
-class AddSequenceWizardChai(SelectResidueWizard):
+class AddSequenceWizardBiofold(SelectResidueWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
@@ -160,6 +199,21 @@ class AddSequenceWizardChai(SelectResidueWizard):
 
         # StructName
         inputObj = getattr(protocol, inputParams[0]).get()
+
+        if isinstance(inputObj, str):
+            seqName = inputObj.split('name = ')[1].split(')')[0]
+
+            seqSet = form.protocol.inputSetOfSequences.get()
+            realSeq = None
+
+            for seq in seqSet:
+                if seq.getName() == seqName or seqName in str(seq):
+                    realSeq = seq
+                    break
+            if realSeq is None:
+                raise Exception(f"Sequence {seqName} not found in set")
+            inputObj = realSeq
+
         pdbFile, AS, addPointer = '', False, True
         if issubclass(type(inputObj), str):
             outStr = [inputObj]
@@ -216,18 +270,33 @@ class AddSequenceWizardChai(SelectResidueWizard):
         form.setVar(outputParam[0], prevStr + jsonStr)
 
 
-AddSequenceWizardChai().addTarget(protocol=ProtChai,
-                              targets=['addInput'],
-                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct']},
-                                      'inpChain', 'inpPositions'],
-                              outputs=['inputList', 'inputPointers'])
-AddSequenceWizardChai().addTarget(protocol=ProtIntelliFold,
-                              targets=['addInput'],
-                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
-                                      'inpChain', 'inpPositions'],
-                              outputs=['inputList', 'inputPointers'])
-AddSequenceWizardChai().addTarget(protocol=ProtProtenix,
-                              targets=['addInput'],
-                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
-                                      'inpChain', 'inpPositions'],
-                              outputs=['inputList', 'inputPointers'])
+AddSequenceWizardBiofold().addTarget(protocol=ProtChai,
+                                     targets=['addInput'],
+                                     inputs=[{'inputOrigin': [
+                                         'inputSequence',
+                                         'inputSequenceFromSet',
+                                         'inputAtomStruct'
+                                     ]},
+                                         'inpChain',
+                                         'inpPositions'],
+                                     outputs=['inputList', 'inputPointers'])
+AddSequenceWizardBiofold().addTarget(protocol=ProtIntelliFold,
+                                     targets=['addInput'],
+                                     inputs=[{'inputOrigin': [
+                                         'inputSequence',
+                                         'inputSequenceFromSet',
+                                         'inputAtomStruct'
+                                     ]},
+                                         'inpChain',
+                                         'inpPositions'],
+                                     outputs=['inputList', 'inputPointers'])
+AddSequenceWizardBiofold().addTarget(protocol=ProtProtenix,
+                                     targets=['addInput'],
+                                     inputs=[{'inputOrigin': [
+                                         'inputSequence',
+                                         'inputSequenceFromSet',
+                                         'inputAtomStruct'
+                                     ]},
+                                         'inpChain',
+                                         'inpPositions'],
+                                     outputs=['inputList', 'inputPointers'])
