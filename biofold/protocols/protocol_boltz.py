@@ -222,6 +222,9 @@ class ProtBoltz(EMProtocol):
                       help='Select the results fasta file.')
 
         group = form.addGroup('Parameters')
+        group.addParam('msa', params.BooleanParam, default=True,
+                      label="Run with MSAs: ",
+                      help='Choose whether to run with MSAs for improved performance.')
         group.addParam('infPot', params.BooleanParam, default=False,
                         label="Inference potentials: ",
                         help='Choose whether to use inference potentials to improve physical plausibility of the predicted poses.')
@@ -356,7 +359,8 @@ class ProtBoltz(EMProtocol):
         if self.infPot.get():
             args.append("--use_potentials")
 
-        args.append("--use_msa_server --cache ./mol")
+        if self.msa.get():
+            args.append("--use_msa_server --cache ./mol")
         args.append(f" --recycling_steps {self.recyclingSteps.get()}")
         args.append(f" --sampling_steps {self.samplingSteps.get()}")
         args.append(f" --diffusion_samples {self.diffusionSamples.get()}")
