@@ -195,7 +195,7 @@ class ProtProtenix(EMProtocol):
         with open(jsonPath, "w") as f:
             json.dump([
                 {
-                    "name": "intellifold_job",
+                    "name": "protenix_job",
                     "sequences": sequences
                 }
             ], f, indent=2)
