@@ -25,6 +25,7 @@
 # **************************************************************************
 import json
 import string
+import re
 
 import os
 import pyworkflow.protocol.params as params
