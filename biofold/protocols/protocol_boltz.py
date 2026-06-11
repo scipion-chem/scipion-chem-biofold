@@ -152,7 +152,6 @@ class ProtBoltz(EMProtocol):
     reproducible structural prediction workflows.
     """
     _label = 'boltz-2 modelling'
-    protSeq = ProtDefineSetOfSequences()
 
     # -------------------------- DEFINE param functions ----------------------
     def _addInputForm(self, form):

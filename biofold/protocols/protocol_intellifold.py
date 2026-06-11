@@ -169,7 +169,6 @@ class ProtIntelliFold(EMProtocol):
         workflows.
     """
     _label = 'intellifold modelling'
-    protSeq = ProtDefineSetOfSequences()
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
