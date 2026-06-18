@@ -206,7 +206,7 @@ class ProtChai(EMProtocol):
                       default='', label='List of inputs: ',
                       help='The list of input to use for the final output set.')
 
-        form.addParam('file', params.FileParam, condition='inputOrigin == 2',
+        form.addParam('file', params.FileParam, condition='inputOrigin == 3',
                       label='Sequence file: ',
                       help='Select the fasta file.')
 
@@ -226,7 +226,7 @@ class ProtChai(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        if (self.inputOrigin.get() != 2):
+        if (self.inputOrigin.get() != 3):
             self._insertFunctionStep(self.createInputFileStep)
         else:
             self._insertFunctionStep(self.ensureFastaHasNames)
