@@ -138,7 +138,7 @@ class ProtProtenix(EMProtocol):
                       help='Input origin to add to the set')
         ProtChai._addInputForm(form)
 
-        form.addParam('inputList', params.TextParam, width=100, condition='inputOrigin in [0,1]',
+        form.addParam('inputList', params.TextParam, width=100, condition='inputOrigin!=3',
                       default='', label='List of inputs: ',
                       help='The list of input to use for the final output set.')
 
