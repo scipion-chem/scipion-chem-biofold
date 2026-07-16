@@ -158,6 +158,10 @@ class ProtProtenix(EMProtocol):
         group.addParam('msa', params.BooleanParam, default=True,
                       label="Run with MSAs: ",
                       help='Choose whether to run with MSAs for improved performance.')
+        group.addParam('maxMsaDepth', params.IntParam, default=0, expertLevel=params.LEVEL_ADVANCED,
+                       condition='msa',
+                       label='MSA max depth: ',
+                       help='Maximum number of MSA sequences to use. Set to 0 to keep the model default.')
         group.addParam('sample', params.IntParam, default=5,
                        label='Output models: ', help="Number of output models for prediction.")
         group.addParam('steps', params.IntParam, default=200,
@@ -240,6 +244,8 @@ class ProtProtenix(EMProtocol):
 
         if self.msa.get():
             args.append("--use_msa TRUE")
+            if self.maxMsaDepth.get() > 0:
+                args.append(f" --max_msa_depth {self.maxMsaDepth.get()}")
         else:
             args.append("--use_msa FALSE")
 
@@ -345,6 +351,8 @@ class ProtProtenix(EMProtocol):
 
     def _validate(self):
         validations = []
+        if self.msa.get() and self.maxMsaDepth.get() < 0:
+            validations.append('MSA max depth must be 0 or greater.')
         return validations
 
     def _warnings(self):
@@ -482,4 +490,3 @@ class ProtProtenix(EMProtocol):
         fixedLines.append(f">{entityType}|{header}\n")
         for i in range(0, len(sequence), 80):
             fixedLines.append(sequence[i:i + 80] + "\n")
-

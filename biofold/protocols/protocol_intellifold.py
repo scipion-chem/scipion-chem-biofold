@@ -208,6 +208,10 @@ class ProtIntelliFold(EMProtocol):
         group.addParam('msa', params.BooleanParam, default=True,
                        label="Use MSA: ",
                        help='Choose whether to use multiple sequence alignment.')
+        group.addParam('msaMaxDepth', params.IntParam, default=0, expertLevel=params.LEVEL_ADVANCED,
+                       condition='msa',
+                       label='MSA max depth: ',
+                       help='Maximum number of MSA sequences to use. Set to 0 to keep the model default.')
         group.addParam('model', params.EnumParam, default=2,
                       label='Prediction model: ', choices=['v1', 'v2', 'v2-flash'],
                       help="Options are 'v1', 'v2', and 'v2-flash'. 'v2-flash' is the default and recommended model, "
@@ -326,6 +330,8 @@ class ProtIntelliFold(EMProtocol):
 
         if self.msa.get():
             args.append("--use_msa_server")
+            if self.msaMaxDepth.get() > 0:
+                args.append(f" --msa_max_depth {self.msaMaxDepth.get()}")
 
         args.extend([
             "--recycling_iters", str(self.recyclingSteps.get()),
@@ -425,6 +431,8 @@ class ProtIntelliFold(EMProtocol):
 
     def _validate(self):
         validations = []
+        if self.msa.get() and self.msaMaxDepth.get() < 0:
+            validations.append('MSA max depth must be 0 or greater.')
         return validations
 
     def _warnings(self):
@@ -445,4 +453,3 @@ class ProtIntelliFold(EMProtocol):
             return 'rna'
 
         return 'dna'
-
