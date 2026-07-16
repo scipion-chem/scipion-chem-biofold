@@ -331,7 +331,7 @@ class ProtIntelliFold(EMProtocol):
         if self.msa.get():
             args.append("--use_msa_server")
             if self.msaMaxDepth.get() > 0:
-                args.append(f" --msa_max_depth {self.msaMaxDepth.get()}")
+                args.append(f"--msa_max_depth {self.msaMaxDepth.get()}")
 
         args.extend([
             "--recycling_iters", str(self.recyclingSteps.get()),

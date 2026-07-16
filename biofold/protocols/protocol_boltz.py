@@ -365,8 +365,8 @@ class ProtBoltz(EMProtocol):
 
         args.append("--use_msa_server --cache ./mol")
         if self.subsampleMsa.get():
-            args.append(" --subsample_msa")
-            args.append(f" --num_subsampled_msa {self.numSubsampledMsa.get()}")
+            args.append("--subsample_msa")
+            args.append(f"--num_subsampled_msa {self.numSubsampledMsa.get()}")
         args.append(f" --recycling_steps {self.recyclingSteps.get()}")
         args.append(f" --sampling_steps {self.samplingSteps.get()}")
         args.append(f" --diffusion_samples {self.diffusionSamples.get()}")

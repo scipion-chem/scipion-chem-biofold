@@ -296,7 +296,7 @@ class ProtChai(EMProtocol):
         if self.msa.get():
             args.append("--use-msa-server")
             if self.maxMsaSeqs.get() > 0:
-                args.append(f" --max_msa_seqs {self.maxMsaSeqs.get()}")
+                args.append(f"--max_msa_seqs {self.maxMsaSeqs.get()}")
 
         args.append(f" --num-trunk-recycles {self.trunkRecycles.get()}")
         args.append(f" --num-diffn-timesteps {self.timeSteps.get()}")

@@ -245,7 +245,7 @@ class ProtProtenix(EMProtocol):
         if self.msa.get():
             args.append("--use_msa TRUE")
             if self.maxMsaDepth.get() > 0:
-                args.append(f" --max_msa_depth {self.maxMsaDepth.get()}")
+                args.append(f"--max_msa_depth {self.maxMsaDepth.get()}")
         else:
             args.append("--use_msa FALSE")
 
