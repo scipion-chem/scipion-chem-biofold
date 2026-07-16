@@ -132,6 +132,14 @@ class ProtProtenix(EMProtocol):
         Params:
             form: this is the form to be populated with sections and params.
         """
+        form.addHidden('useGpu', params.BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation. Choose one.")
+
+        form.addHidden('gpuList', params.StringParam, default='0',
+                       label="Choose GPU IDs",
+                       help="Comma-separated GPU devices that can be used.")
+
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
                       label='Input origin: ', choices=['Sequence', 'SetOfSequences', 'AtomStruct', 'fasta file'],
@@ -244,9 +252,13 @@ class ProtProtenix(EMProtocol):
             "export CUDA_HOME=$CONDA_PREFIX && "
             "export CPATH=$CONDA_PREFIX/targets/x86_64-linux/include:$CPATH && "
             "export LD_LIBRARY_PATH=$CONDA_PREFIX/targets/x86_64-linux/lib:$LD_LIBRARY_PATH && "
-            f"export PROTENIX_ROOT_DIR={Plugin.getVar(PROTENIX_DIC['home'])} &&"
-            "protenix pred"
+            f"export PROTENIX_ROOT_DIR={Plugin.getVar(PROTENIX_DIC['home'])} && "
         )
+
+        if self.useGpu.get():
+            program_prefix += f"export CUDA_VISIBLE_DEVICES={self.gpuList.get()} && "
+
+        program_prefix += "protenix pred"
 
         Plugin.runCondaCommand(
             self,

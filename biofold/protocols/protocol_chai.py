@@ -196,6 +196,14 @@ class ProtChai(EMProtocol):
         Params:
             form: this is the form to be populated with sections and params.
         """
+        form.addHidden('useGpu', params.BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation. Choose one.")
+
+        form.addHidden('gpuList', params.StringParam, default='0',
+                       label="Choose GPU IDs",
+                       help="Comma-separated GPU devices that can be used.")
+
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
                       label='Input origin: ', choices=['Sequence','SetOfSequences','AtomStruct', 'fasta file'],
@@ -289,11 +297,15 @@ class ProtChai(EMProtocol):
         args.append(f" --num-trunk-samples {self.trunkSamples.get()}")
         args.append(f" --num-diffn-samples {self.diffNsamples.get()}")
 
+        program = 'chai-lab fold'
+        if self.useGpu.get():
+            program = f"CUDA_VISIBLE_DEVICES={self.gpuList.get()} chai-lab fold"
+
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
             condaDic=CHAI_DIC,
-            program="chai-lab fold",
+            program=program,
             cwd=os.path.abspath(Plugin.getVar(CHAI_DIC['home']))
         )
 

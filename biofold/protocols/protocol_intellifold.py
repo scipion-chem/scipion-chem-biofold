@@ -176,6 +176,14 @@ class ProtIntelliFold(EMProtocol):
         Params:
             form: this is the form to be populated with sections and params.
         """
+        form.addHidden('useGpu', params.BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation. Choose one.")
+
+        form.addHidden('gpuList', params.StringParam, default='0',
+                       label="Choose GPU IDs",
+                       help="Comma-separated GPU devices that can be used.")
+
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
                       label='Input origin: ', choices=['Sequence', 'SetOfSequences', 'AtomStruct', 'fasta file'],
@@ -328,12 +336,15 @@ class ProtIntelliFold(EMProtocol):
             "--out_dir", os.path.abspath(self._getPath('intellifold_output'))
         ])
 
+        program = "intellifold predict"
+        if self.useGpu.get():
+            program = f"CUDA_VISIBLE_DEVICES={self.gpuList.get()} intellifold predict"
 
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
             condaDic=INTELLIFOLD_DIC,
-            program="intellifold predict",
+            program=program,
             cwd=os.path.abspath(Plugin.getVar(INTELLIFOLD_DIC['home']))
         )
 
