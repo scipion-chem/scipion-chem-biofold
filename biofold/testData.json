@@ -4,11 +4,7 @@
 		"gpu": [
 			"test_biofold.TestChai"
 		],
-		"dependencies": [
-			
-		],
-		"others": [
-			
-		]
+		"dependencies": [],
+		"others": []
 	}
 }
