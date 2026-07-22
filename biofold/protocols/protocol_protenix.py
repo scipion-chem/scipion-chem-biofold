@@ -510,3 +510,5 @@ class ProtProtenix(EMProtocol):
         fixedLines.append(f">{entityType}|{header}\n")
         for i in range(0, len(sequence), 80):
             fixedLines.append(sequence[i:i + 80] + "\n")
+
+
