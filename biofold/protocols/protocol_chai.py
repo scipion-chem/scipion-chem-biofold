@@ -492,23 +492,18 @@ class ProtChai(EMProtocol):
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
         outputPath = os.path.join(self._getPath('input.fasta'))
-
         with open(fastaPath) as f:
             lines = f.readlines()
-
         fixedLines = []
         counter = 1
         sequenceBuffer = ""
         currentHeader = None
-
         for line in lines:
             line = line.rstrip("\n")
             if line.startswith(">"):
                 if currentHeader is not None:
                     entityType = self.guessEntityType(sequenceBuffer)
-
                     chains = self.extractChainsFromHeader(currentHeader)
-
                     if chains:
                         for chain in chains:
                             self.writeSequence(
@@ -528,21 +523,14 @@ class ProtChai(EMProtocol):
                             fixedLines
                         )
                         counter += 1
-
                 header = line[1:]
-
-
                 currentHeader = header
                 sequenceBuffer = ""
             else:
                 sequenceBuffer += line.strip()
-
-        # Handle the last sequence in the file
         if currentHeader is not None:
             entityType = self.guessEntityType(sequenceBuffer)
-
             chains = self.extractChainsFromHeader(currentHeader)
-
             if chains:
                 for chain in chains:
                     self.writeSequence(
@@ -562,7 +550,6 @@ class ProtChai(EMProtocol):
                     fixedLines
                 )
                 counter += 1
-
         with open(outputPath, 'w') as f:
             f.writelines(fixedLines)
 

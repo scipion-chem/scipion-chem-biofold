@@ -41,6 +41,7 @@ from pwem.objects import  AtomStruct, SetOfAtomStructs
 from pwem.objects import Sequence, SetOfSequences
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 from pwchem.utils.utilsFasta import parseFasta
+from .protocol_chai import ProtChai
 
 
 
@@ -283,7 +284,7 @@ class ProtBoltz(EMProtocol):
 
                         entity = self.guessEntityType(sequenceBuffer)
 
-                        chainIds = self.extractChainsFromHeader(currentHeader)
+                        chainIds = ProtChai.extractChainsFromHeader(self,currentHeader)
 
                         if not chainIds:
                             chainIds = [next(nextChain)]
@@ -306,7 +307,7 @@ class ProtBoltz(EMProtocol):
 
             entity = self.guessEntityType(sequenceBuffer)
 
-            chainIds = self.extractChainsFromHeader(currentHeader)
+            chainIds = ProtChai.extractChainsFromHeader(self,currentHeader)
 
             if not chainIds:
                 chainIds = [next(nextChain)]
@@ -543,21 +544,4 @@ class ProtBoltz(EMProtocol):
 
         return 'dna'
 
-    def extractChainsFromHeader(self, header):
-        """
-        Extract chain IDs from RCSB FASTA headers.
 
-        Examples
-        --------
-        >8ZB4_1|Chains A, B|
-            -> ['A', 'B']
-
-        >1ABC_1|Chain C|
-            -> ['C']
-        """
-        m = re.search(r'\bChains?\s+([^|]+)', header)
-
-        if not m:
-            return []
-
-        return [c.strip() for c in m.group(1).split(",") if c.strip()]

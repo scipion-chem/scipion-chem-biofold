@@ -260,7 +260,7 @@ class ProtIntelliFold(EMProtocol):
 
                         entityType = self.guessEntityType(sequenceBuffer)
 
-                        chainIds = self.extractChainsFromHeader(currentHeader)
+                        chainIds = ProtChai.extractChainsFromHeader(self,currentHeader)
 
                         if not chainIds:
                             chainIds = [next(nextChain)]
@@ -282,7 +282,7 @@ class ProtIntelliFold(EMProtocol):
 
             entityType = self.guessEntityType(sequenceBuffer)
 
-            chainIds = self.extractChainsFromHeader(currentHeader)
+            chainIds = ProtChai.extractChainsFromHeader(self,currentHeader)
 
             if not chainIds:
                 chainIds = [next(nextChain)]
@@ -482,21 +482,4 @@ class ProtIntelliFold(EMProtocol):
 
         return 'dna'
 
-    def extractChainsFromHeader(self, header):
-        """
-        Extract chain IDs from RCSB FASTA headers.
 
-        Examples
-        --------
-        >8ZB4_1|Chains A, B|...
-            -> ['A', 'B']
-
-        >1ABC_1|Chain C|...
-            -> ['C']
-        """
-        m = re.search(r'\bChains?\s+([^|]+)', header)
-
-        if not m:
-            return []
-
-        return [c.strip() for c in m.group(1).split(",") if c.strip()]
