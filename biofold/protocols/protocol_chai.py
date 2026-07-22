@@ -466,6 +466,29 @@ class ProtChai(EMProtocol):
 
         return 'dna'
 
+    def extractChainsFromHeader(self, header):
+        """
+        Extract chain identifiers from RCSB FASTA headers.
+
+        Examples:
+            8ZB4_1|Chains A, B|...
+                -> ['A', 'B']
+
+            1ABC_1|Chain A|...
+                -> ['A']
+
+            other headers
+                -> []
+        """
+        m = re.search(r'\bChains?\s+([^|]+)', header)
+
+        if not m:
+            return []
+
+        chainText = m.group(1)
+
+        return [c.strip() for c in chainText.split(",") if c.strip()]
+
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
         outputPath = os.path.join(self._getPath('input.fasta'))
@@ -483,17 +506,31 @@ class ProtChai(EMProtocol):
             if line.startswith(">"):
                 if currentHeader is not None:
                     entityType = self.guessEntityType(sequenceBuffer)
-                    self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
-                    counter += 1
+
+                    chains = self.extractChainsFromHeader(currentHeader)
+
+                    if chains:
+                        for chain in chains:
+                            self.writeSequence(
+                                entityType,
+                                f"{currentHeader}_chain_{chain}",
+                                sequenceBuffer,
+                                counter,
+                                fixedLines
+                            )
+                            counter += 1
+                    else:
+                        self.writeSequence(
+                            entityType,
+                            currentHeader,
+                            sequenceBuffer,
+                            counter,
+                            fixedLines
+                        )
+                        counter += 1
 
                 header = line[1:]
-                # If it's already a Scipion-style header, take the name part
-                if "|name=" in header:
-                    header = header.split("|name=")[-1]
 
-                # SANITIZATION: Chai-1 only allows one '|' to separate type and name.
-                # We replace all non-alphanumeric chars (including extra pipes) with underscores.
-                header = re.sub(r'[^a-zA-Z0-9_-]', '_', header)
 
                 currentHeader = header
                 sequenceBuffer = ""
@@ -503,8 +540,28 @@ class ProtChai(EMProtocol):
         # Handle the last sequence in the file
         if currentHeader is not None:
             entityType = self.guessEntityType(sequenceBuffer)
-            self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
-            counter += 1
+
+            chains = self.extractChainsFromHeader(currentHeader)
+
+            if chains:
+                for chain in chains:
+                    self.writeSequence(
+                        entityType,
+                        f"{currentHeader}_chain_{chain}",
+                        sequenceBuffer,
+                        counter,
+                        fixedLines
+                    )
+                    counter += 1
+            else:
+                self.writeSequence(
+                    entityType,
+                    currentHeader,
+                    sequenceBuffer,
+                    counter,
+                    fixedLines
+                )
+                counter += 1
 
         with open(outputPath, 'w') as f:
             f.writelines(fixedLines)
@@ -513,7 +570,9 @@ class ProtChai(EMProtocol):
 
     def writeSequence(self, entityType, header, sequence, counter, fixedLines):
         # Ensure header isn't empty after sanitization
-        clean_header = header.strip('_')
+        clean_header = re.sub(r'[^a-zA-Z0-9_-]', '_', header)
+        clean_header = re.sub(r'_+', '_', clean_header).strip('_')
+
         if not clean_header:
             clean_header = f"seq{counter}"
 

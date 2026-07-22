@@ -243,24 +243,60 @@ class ProtIntelliFold(EMProtocol):
 
     def createJsonFromFastaStep(self):
         fastaPath = os.path.abspath(self.file.get())
-        seqDic = parseFasta(fastaPath)
 
-        chainIdIiter = iter(string.ascii_uppercase)
         entities = []
+        nextChain = iter(string.ascii_uppercase)
 
-        for seqName, sequence in seqDic.items():
-            chainId = next(chainIdIiter)
-            entity = self.guessEntityType(sequence)
+        currentHeader = None
+        sequenceBuffer = ""
+
+        with open(fastaPath) as f:
+            for line in f:
+                line = line.strip()
+
+                if line.startswith(">"):
+
+                    if currentHeader is not None:
+
+                        entityType = self.guessEntityType(sequenceBuffer)
+
+                        chainIds = self.extractChainsFromHeader(currentHeader)
+
+                        if not chainIds:
+                            chainIds = [next(nextChain)]
+
+                        entityDict = {
+                            "id": chainIds if len(chainIds) > 1 else chainIds[0],
+                            "sequence": sequenceBuffer
+                        }
+
+                        entities.append({entityType: entityDict})
+
+                    currentHeader = line[1:]
+                    sequenceBuffer = ""
+
+                else:
+                    sequenceBuffer += line
+
+        if currentHeader is not None:
+
+            entityType = self.guessEntityType(sequenceBuffer)
+
+            chainIds = self.extractChainsFromHeader(currentHeader)
+
+            if not chainIds:
+                chainIds = [next(nextChain)]
 
             entityDict = {
-                "id": chainId,
-                "sequence": sequence
+                "id": chainIds if len(chainIds) > 1 else chainIds[0],
+                "sequence": sequenceBuffer
             }
 
-            entities.append({entity: entityDict})
+            entities.append({entityType: entityDict})
 
         jsonPath = os.path.abspath(self._getPath("input.json"))
-        with open(jsonPath, 'w') as f:
+
+        with open(jsonPath, "w") as f:
             json.dump({"sequences": entities}, f, indent=2)
 
 
@@ -446,3 +482,21 @@ class ProtIntelliFold(EMProtocol):
 
         return 'dna'
 
+    def extractChainsFromHeader(self, header):
+        """
+        Extract chain IDs from RCSB FASTA headers.
+
+        Examples
+        --------
+        >8ZB4_1|Chains A, B|...
+            -> ['A', 'B']
+
+        >1ABC_1|Chain C|...
+            -> ['C']
+        """
+        m = re.search(r'\bChains?\s+([^|]+)', header)
+
+        if not m:
+            return []
+
+        return [c.strip() for c in m.group(1).split(",") if c.strip()]

@@ -184,29 +184,60 @@ class ProtProtenix(EMProtocol):
 
     def createProtenixJsonFromFastaStep(self):
         fastaPath = os.path.abspath(self.file.get())
-        seqDic = parseFasta(fastaPath)
 
-        chainIdIter = iter(string.ascii_uppercase)
         sequences = []
+        nextChain = iter(string.ascii_uppercase)
 
-        for _, sequence in seqDic.items():
-            chainId = next(chainIdIter)
+        currentHeader = None
+        sequenceBuffer = ""
 
-            entityType = self.guessEntityType(sequence)
+        with open(fastaPath) as f:
+            for line in f:
+                line = line.strip()
+
+                if line.startswith(">"):
+
+                    if currentHeader is not None:
+
+                        entityType = self.guessEntityType(sequenceBuffer)
+
+                        chainIds = self.extractChainsFromHeader(currentHeader)
+
+                        if not chainIds:
+                            chainIds = [next(nextChain)]
+
+                        sequences.append(
+                            self._buildProtenixEntity(
+                                entityType,
+                                sequenceBuffer,
+                                chainIds
+                            )
+                        )
+
+                    currentHeader = line[1:]
+                    sequenceBuffer = ""
+
+                else:
+                    sequenceBuffer += line
+
+        if currentHeader is not None:
+
+            entityType = self.guessEntityType(sequenceBuffer)
+
+            chainIds = self.extractChainsFromHeader(currentHeader)
+
+            if not chainIds:
+                chainIds = [next(nextChain)]
 
             sequences.append(
-                self._buildProtenixEntity(entityType, sequence, chainId)
+                self._buildProtenixEntity(
+                    entityType,
+                    sequenceBuffer,
+                    chainIds
+                )
             )
 
-        jsonPath = os.path.abspath(self._getPath("protenix_input.json"))
-
-        with open(jsonPath, "w") as f:
-            json.dump([
-                {
-                    "name": "protenix_job",
-                    "sequences": sequences
-                }
-            ], f, indent=2)
+        self._writeJson(sequences)
 
     def createProtenixInputFileStep(self):
         chainIdIter = iter(string.ascii_uppercase)
@@ -352,6 +383,25 @@ class ProtProtenix(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def extractChainsFromHeader(self, header):
+        """
+        Extract chain IDs from RCSB FASTA headers.
+
+        Examples
+        --------
+        >8ZB4_1|Chains A, B|...
+            -> ['A', 'B']
+
+        >1ABC_1|Chain C|...
+            -> ['C']
+        """
+        m = re.search(r'\bChains?\s+([^|]+)', header)
+
+        if not m:
+            return []
+
+        return [c.strip() for c in m.group(1).split(",") if c.strip()]
+
     def getExtraFiles(self):
         """Recursively find all .cif files in the protenix_results folder"""
         extraFiles = []
@@ -385,15 +435,17 @@ class ProtProtenix(EMProtocol):
 
         return 'dna'
 
-    def _buildProtenixEntity(self, entityType, sequence, chainId):
+    def _buildProtenixEntity(self, entityType, sequence, chainIds):
         sequence = "".join(sequence.split()).upper()
-
         entityType = entityType.lower()
+
+        if isinstance(chainIds, str):
+            chainIds = [chainIds]
 
         inner_data = {
             "sequence": sequence,
-            "count": 1,
-            "id": [str(chainId)]
+            "count": len(chainIds),
+            "id": chainIds
         }
 
         # 3. Use the specific Protenix keys
@@ -421,21 +473,7 @@ class ProtProtenix(EMProtocol):
         with open(jsonPath, "w") as f:
             json.dump(job_data, f, indent=2)
 
-    def createProtenixJsonFromFastaStep(self):
-        fastaPath = os.path.abspath(self.file.get())
-        seqDic = parseFasta(fastaPath)
 
-        chainIdIter = iter(string.ascii_uppercase)
-        sequences = []
-
-        for _, sequence in seqDic.items():
-            chainId = next(chainIdIter)
-            entityType = self.guessEntityType(sequence)
-            sequences.append(
-                self._buildProtenixEntity(entityType, sequence, chainId)
-            )
-
-        self._writeJson(sequences)
 
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
