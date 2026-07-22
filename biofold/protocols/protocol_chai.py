@@ -467,27 +467,18 @@ class ProtChai(EMProtocol):
         return 'dna'
 
     def extractChainsFromHeader(self, header):
-        """
-        Extract chain identifiers from RCSB FASTA headers.
-
-        Examples:
-            8ZB4_1|Chains A, B|...
-                -> ['A', 'B']
-
-            1ABC_1|Chain A|...
-                -> ['A']
-
-            other headers
-                -> []
-        """
         m = re.search(r'\bChains?\s+([^|]+)', header)
 
         if not m:
             return []
 
-        chainText = m.group(1)
+        chains = []
+        for token in m.group(1).split(","):
+            m2 = re.match(r"[A-Za-z0-9]+", token.strip())
+            if m2:
+                chains.append(m2.group(0))
 
-        return [c.strip() for c in chainText.split(",") if c.strip()]
+        return chains
 
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
