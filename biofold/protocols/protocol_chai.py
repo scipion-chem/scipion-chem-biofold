@@ -474,46 +474,81 @@ class ProtChai(EMProtocol):
 
         return 'dna'
 
+    def extractChainsFromHeader(self, header):
+        m = re.search(r'\bChains?\s+([^|]+)', header)
+
+        if not m:
+            return []
+
+        chains = []
+        for token in m.group(1).split(","):
+            m2 = re.match(r"[A-Za-z0-9]+", token.strip())
+            if m2:
+                chains.append(m2.group(0))
+
+        return chains
+
     def ensureFastaHasNames(self):
         fastaPath = os.path.abspath(self.file.get())
         outputPath = os.path.join(self._getPath('input.fasta'))
-
         with open(fastaPath) as f:
             lines = f.readlines()
-
         fixedLines = []
         counter = 1
         sequenceBuffer = ""
         currentHeader = None
-
         for line in lines:
             line = line.rstrip("\n")
             if line.startswith(">"):
                 if currentHeader is not None:
                     entityType = self.guessEntityType(sequenceBuffer)
-                    self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
-                    counter += 1
-
+                    chains = self.extractChainsFromHeader(currentHeader)
+                    if chains:
+                        for chain in chains:
+                            self.writeSequence(
+                                entityType,
+                                f"{currentHeader}_chain_{chain}",
+                                sequenceBuffer,
+                                counter,
+                                fixedLines
+                            )
+                            counter += 1
+                    else:
+                        self.writeSequence(
+                            entityType,
+                            currentHeader,
+                            sequenceBuffer,
+                            counter,
+                            fixedLines
+                        )
+                        counter += 1
                 header = line[1:]
-                # If it's already a Scipion-style header, take the name part
-                if "|name=" in header:
-                    header = header.split("|name=")[-1]
-
-                # SANITIZATION: Chai-1 only allows one '|' to separate type and name.
-                # We replace all non-alphanumeric chars (including extra pipes) with underscores.
-                header = re.sub(r'[^a-zA-Z0-9_-]', '_', header)
-
                 currentHeader = header
                 sequenceBuffer = ""
             else:
                 sequenceBuffer += line.strip()
-
-        # Handle the last sequence in the file
         if currentHeader is not None:
             entityType = self.guessEntityType(sequenceBuffer)
-            self.writeSequence(entityType, currentHeader, sequenceBuffer, counter, fixedLines)
-            counter += 1
-
+            chains = self.extractChainsFromHeader(currentHeader)
+            if chains:
+                for chain in chains:
+                    self.writeSequence(
+                        entityType,
+                        f"{currentHeader}_chain_{chain}",
+                        sequenceBuffer,
+                        counter,
+                        fixedLines
+                    )
+                    counter += 1
+            else:
+                self.writeSequence(
+                    entityType,
+                    currentHeader,
+                    sequenceBuffer,
+                    counter,
+                    fixedLines
+                )
+                counter += 1
         with open(outputPath, 'w') as f:
             f.writelines(fixedLines)
 
@@ -521,7 +556,9 @@ class ProtChai(EMProtocol):
 
     def writeSequence(self, entityType, header, sequence, counter, fixedLines):
         # Ensure header isn't empty after sanitization
-        clean_header = header.strip('_')
+        clean_header = re.sub(r'[^a-zA-Z0-9_-]', '_', header)
+        clean_header = re.sub(r'_+', '_', clean_header).strip('_')
+
         if not clean_header:
             clean_header = f"seq{counter}"
 

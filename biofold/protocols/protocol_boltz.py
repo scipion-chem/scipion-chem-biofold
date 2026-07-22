@@ -41,6 +41,7 @@ from pwem.objects import  AtomStruct, SetOfAtomStructs
 from pwem.objects import Sequence, SetOfSequences
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 from pwchem.utils.utilsFasta import parseFasta
+from .protocol_chai import ProtChai
 
 
 
@@ -273,26 +274,62 @@ class ProtBoltz(EMProtocol):
 
     def createJsonFromFastaStep(self):
         fastaPath = os.path.abspath(self.file.get())
-        seqDic = parseFasta(fastaPath)
 
-        chainIdIiter = iter(string.ascii_uppercase)
+        nextChain = iter(string.ascii_uppercase)
         entities = []
 
-        for seqName, sequence in seqDic.items():
-            chainId = next(chainIdIiter)
-            entity = self.guessEntityType(sequence)
-            cyclic = self.cyclic.get()
+        currentHeader = None
+        sequenceBuffer = ""
+
+        with open(fastaPath) as f:
+            for line in f:
+                line = line.strip()
+
+                if line.startswith(">"):
+
+                    if currentHeader is not None:
+
+                        entity = self.guessEntityType(sequenceBuffer)
+
+                        chainIds = ProtChai.extractChainsFromHeader(self,currentHeader)
+
+                        if not chainIds:
+                            chainIds = [next(nextChain)]
+
+                        entityDict = {
+                            "id": chainIds if len(chainIds) > 1 else chainIds[0],
+                            "cyclic": self.cyclic.get(),
+                            "sequence": sequenceBuffer
+                        }
+
+                        entities.append({entity: entityDict})
+
+                    currentHeader = line[1:]
+                    sequenceBuffer = ""
+
+                else:
+                    sequenceBuffer += line
+
+        if currentHeader is not None:
+
+            entity = self.guessEntityType(sequenceBuffer)
+
+            chainIds = ProtChai.extractChainsFromHeader(self,currentHeader)
+
+            if not chainIds:
+                chainIds = [next(nextChain)]
 
             entityDict = {
-                "id": chainId,
-                "cyclic": cyclic,
-                "sequence": sequence
+                "id": chainIds if len(chainIds) > 1 else chainIds[0],
+                "cyclic": self.cyclic.get(),
+                "sequence": sequenceBuffer
             }
 
             entities.append({entity: entityDict})
 
         jsonPath = os.path.abspath(self._getPath("input.json"))
-        with open(jsonPath, 'w') as f:
+
+        with open(jsonPath, "w") as f:
             json.dump({"sequences": entities}, f, indent=2)
 
 
@@ -518,3 +555,5 @@ class ProtBoltz(EMProtocol):
             return 'rna'
 
         return 'dna'
+
+
