@@ -2,11 +2,48 @@
 Biofold plugin
 =======================
 
-**Documentation under development, sorry for the inconvenience**
+This is a **Scipion** plugin for protein / nucleic-acid structure prediction ("folding").
+It can **run** several diffusion / deep-learning models locally and/or **import** results
+produced by their public web servers:
+`Boltz-2 <https://github.com/jwohlwend/boltz>`_,
+`Chai-1 <https://github.com/chaidiscovery/chai-lab>`_,
+`IntelliFold <https://github.com/IntelliGen-AI/IntelliFold>`_,
+`Protenix <https://github.com/bytedance/Protenix>`_ and
+`AlphaFold3 <https://github.com/google-deepmind/alphafold3>`_.
 
-This is a **Scipion** plugin that offers tools from the
-`Boltz <https://github.com/jwohlwend/boltz>`_, and `Chai <https://github.com/chaidiscovery/chai-lab>`_, as well as imports for `AlphaFold3 <https://github.com/google-deepmind/alphafold3>`_, `Protenix <https://github.com/bytedance/Protenix>`_, Boltz and Chai server results.
-These tools will make it possible to carry out different functions to fold proteins.
+
+==================================
+Supported models and capabilities
+==================================
+
+Each model is exposed through its own protocol. **Run** means the prediction is computed
+locally (the plugin installs a dedicated conda environment for the model and execution uses
+the GPU). **Import** means results generated on the model's public web server are parsed into
+Scipion objects.
+
+- **Boltz-2** (v2.2.1) — *run and import*. Protein / DNA / RNA; optional binding-affinity
+  estimation; controls for recycling steps, sampling steps, diffusion samples, step scale and
+  inference potentials; cyclic entities.
+- **Chai-1** (v0.6.1) — *run and import*. Protein / DNA / RNA; optional MSA server.
+- **IntelliFold** (v2.0.0) — *run only*. Protein / DNA / RNA; selectable model
+  (``v1`` / ``v2`` / ``v2-flash``); MSA toggle; recycling and sampling steps; number of
+  output models.
+- **Protenix** (v2.0.0) — *run and import*. Selectable model checkpoint
+  (``base_default_v1.0.0`` / ``base_20250630_v1.0.0`` / ``base_default_v0.5.0``); MSA toggle;
+  sampling steps; number of output models.
+- **AlphaFold3** — *import only* (no local run); results imported from the AlphaFold3 server.
+
+**Inputs for local runs:** a Sequence, a SetOfSequences, an AtomStruct (a chain and residue
+positions are extracted from it), or a FASTA file. Runs execute on GPU (GPU IDs are
+selectable in the form).
+
+**Importing predictions** — the *import structure predictions* protocol parses result
+archives into Scipion ``AtomStruct`` objects (each tagged with its origin server) from:
+
+- AlphaFold3 server — https://alphafoldserver.com/
+- Protenix server — https://protenix-server.com/
+- Chai server — https://lab.chaidiscovery.com/
+- Boltz server (Tamarind) — https://app.tamarind.bio/boltz/
 
 
 ==========================
