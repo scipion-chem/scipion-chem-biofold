@@ -126,6 +126,7 @@ class TestIntelliFold(BaseTest):
     def test(self):
         self._runIntelliFold()
 
+@unittest.skipIf(not gpu_available(), "No GPU available, skipping Protenix tests.")
 class TestProtenix(BaseTest):
     @classmethod
     def setUpClass(cls):
