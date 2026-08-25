@@ -84,11 +84,14 @@ class Plugin(pwchemPlugin):
         )
 
         installer.addCommand(
-            "git clone --branch v2.0.0 --depth 1 https://github.com/IntelliGen-AI/IntelliFold.git",
+            "git clone --branch v2.0.2 --depth 1 https://github.com/IntelliGen-AI/IntelliFold.git",
             f"{INTELLIFOLD_DIC['name']}_cloned"
         ).addCommand(
             f"cd IntelliFold && conda env create -f environment.yaml -n {INTELLIFOLD_DIC['name']}-{INTELLIFOLD_DIC['version']}",
             f"{INTELLIFOLD_DIC['name']}_env_created"
+        ).addCommand(
+            f"conda install -n {INTELLIFOLD_DIC['name']}-{INTELLIFOLD_DIC['version']} -c nvidia cuda-toolkit=12.4 -y",
+            f"{INTELLIFOLD_DIC['name']}_cuda_installed"
         ).addCommand(
             f"cd IntelliFold && conda run -n {INTELLIFOLD_DIC['name']}-{INTELLIFOLD_DIC['version']} pip install -e . && touch ../intellifold_installed",
             f"{INTELLIFOLD_DIC['name']}_installed"
