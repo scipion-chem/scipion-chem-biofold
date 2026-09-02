@@ -2,6 +2,7 @@ name: Build & test plugin
 
 on:
   pull_request:
+    branches: [ devel, master ]
 
 jobs:
   build:
