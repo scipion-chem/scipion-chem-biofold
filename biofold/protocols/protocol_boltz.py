@@ -239,6 +239,13 @@ class ProtBoltz(EMProtocol):
                        help='Choose whether to add the molecular weight correction to the affinity prediction.')
         group.addParam('diffusionSamplesAff', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
                        label='Diffusion samples for affinity: ', help="Number of diffusion samples for affinity.")
+        group.addParam('subsampleMsa', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                       label="Subsample MSA: ",
+                       help='Enable MSA subsampling before prediction.')
+        group.addParam('numSubsampledMsa', params.IntParam, default=1024, expertLevel=params.LEVEL_ADVANCED,
+                       condition='subsampleMsa',
+                       label='Subsampled MSA depth: ',
+                       help='Maximum number of MSA sequences to keep when subsampling is enabled.')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -394,6 +401,9 @@ class ProtBoltz(EMProtocol):
             args.append("--use_potentials")
 
         args.append("--use_msa_server --cache ./mol")
+        if self.subsampleMsa.get():
+            args.append("--subsample_msa")
+            args.append(f"--num_subsampled_msa {self.numSubsampledMsa.get()}")
         args.append(f" --recycling_steps {self.recyclingSteps.get()}")
         args.append(f" --sampling_steps {self.samplingSteps.get()}")
         args.append(f" --diffusion_samples {self.diffusionSamples.get()}")
@@ -523,6 +533,8 @@ class ProtBoltz(EMProtocol):
 
     def _validate(self):
         validations = []
+        if self.subsampleMsa.get() and self.numSubsampledMsa.get() <= 0:
+            validations.append('Subsampled MSA depth must be greater than 0.')
         return validations
 
     def _warnings(self):
