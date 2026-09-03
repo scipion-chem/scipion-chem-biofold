@@ -28,6 +28,7 @@ import string
 import re
 
 import os
+import subprocess
 import pyworkflow.protocol.params as params
 from biofold.objects import BoltzEntity
 from pwem.protocols import EMProtocol
@@ -386,6 +387,17 @@ class ProtBoltz(EMProtocol):
 
 
 
+    @staticmethod
+    def _hasGpu():
+        """Return True if at least one NVIDIA GPU is visible, so that a run
+        requested with useGpu=True can fall back to CPU when none is found."""
+        try:
+            result = subprocess.run(["nvidia-smi", "-L"],
+                                    capture_output=True, text=True, timeout=15)
+            return result.returncode == 0 and result.stdout.strip().startswith("GPU")
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return False
+
     def runBoltzStep(self):
         filePath = os.path.abspath(self._getPath("input.yaml"))
         args = [str(filePath)]
@@ -405,12 +417,15 @@ class ProtBoltz(EMProtocol):
         args.append(f" --diffusion_samples_affinity {self.diffusionSamplesAff.get()}")
         args.append(f" --out_dir {os.path.abspath(self._getPath())}")
 
-        if self.useGpu.get():
+        if self.useGpu.get() and self._hasGpu():
             gpu_ids = self.gpuList.get()
             selected_gpu = gpu_ids.split(",")[0]
             os.environ["CUDA_VISIBLE_DEVICES"] = selected_gpu
             args.append("--accelerator gpu")
         else:
+            if self.useGpu.get():
+                self.info("GPU requested (useGpu=True) but no NVIDIA GPU detected; "
+                          "falling back to CPU (--accelerator cpu).")
             args.append("--accelerator cpu")
 
         Plugin.runCondaCommand(
