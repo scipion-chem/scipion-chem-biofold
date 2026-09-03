@@ -50,7 +50,7 @@ class TestChai(BaseTest):
     def _runChai(self):
         protChai = self.newProtocol(
             ProtChai,
-            inputOrigin=2,
+            inputOrigin=3,
             file=self.ds.getFile('Sequences/3lqd_B_mutated.fasta')
         )
 
@@ -73,8 +73,7 @@ class TestBoltz(BaseTest):
     def _runBoltz(self):
         protBoltz = self.newProtocol(
             ProtBoltz,
-            useGpu=False,
-            inputOrigin=2,
+            inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
             samplingSteps=50,
@@ -100,7 +99,7 @@ class TestIntelliFold(BaseTest):
     def _runIntelliFold(self):
         protIntelliFold = self.newProtocol(
             ProtIntelliFold,
-            inputOrigin=2,
+            inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
             samplingSteps=50,
@@ -126,7 +125,7 @@ class TestProtenix(BaseTest):
     def _runProtenix(self):
         protProtenix = self.newProtocol(
             ProtProtenix,
-            inputOrigin=2,
+            inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
             samplingSteps=50,

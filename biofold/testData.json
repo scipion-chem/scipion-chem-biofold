@@ -2,6 +2,8 @@
 	"datasets": ["model_building_tutorial"],
 	"skippable": {
 		"gpu": [
+			"test_biofold.TestBoltz",
+			"test_biofold.TestChai"
 		],
 		"dependencies": [
 
