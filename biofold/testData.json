@@ -1,0 +1,14 @@
+{
+	"datasets": ["model_building_tutorial", "Sequences"],
+	"skippable": {
+		"gpu": [
+
+		],
+		"dependencies": [
+
+		],
+		"others": [
+
+		]
+	}
+}
