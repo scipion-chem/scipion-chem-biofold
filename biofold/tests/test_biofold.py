@@ -41,16 +41,6 @@ defSetSeqs = '''1) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile
                          (names[0], defSetPDBChain, defSetPDBFile)
 
 
-def gpu_available():
-    try:
-        # run nvidia-smi, check if it exists and returns 0
-        subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
-
-
-@unittest.skipIf(not gpu_available(), "No GPU available, skipping Chai tests.")
 class TestChai(BaseTest):
     @classmethod
     def setUpClass(cls):
