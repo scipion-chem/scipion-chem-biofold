@@ -1,5 +1,5 @@
 {
-	"datasets": ["model_building_tutorial", "Sequences"],
+	"datasets": ["model_building_tutorial"],
 	"skippable": {
 		"gpu": [
 
