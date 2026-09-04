@@ -125,6 +125,7 @@ class TestProtenix(BaseTest):
     def _runProtenix(self):
         protProtenix = self.newProtocol(
             ProtProtenix,
+            useGpu=False,
             inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
