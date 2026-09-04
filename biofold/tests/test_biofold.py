@@ -41,16 +41,6 @@ defSetSeqs = '''1) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile
                          (names[0], defSetPDBChain, defSetPDBFile)
 
 
-def gpu_available():
-    try:
-        # run nvidia-smi, check if it exists and returns 0
-        subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
-
-
-@unittest.skipIf(not gpu_available(), "No GPU available, skipping Chai tests.")
 class TestChai(BaseTest):
     @classmethod
     def setUpClass(cls):
@@ -60,7 +50,7 @@ class TestChai(BaseTest):
     def _runChai(self):
         protChai = self.newProtocol(
             ProtChai,
-            inputOrigin=2,
+            inputOrigin=3,
             file=self.ds.getFile('Sequences/3lqd_B_mutated.fasta')
         )
 
@@ -83,8 +73,7 @@ class TestBoltz(BaseTest):
     def _runBoltz(self):
         protBoltz = self.newProtocol(
             ProtBoltz,
-            useGpu=False,
-            inputOrigin=2,
+            inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
             samplingSteps=50,
@@ -110,7 +99,7 @@ class TestIntelliFold(BaseTest):
     def _runIntelliFold(self):
         protIntelliFold = self.newProtocol(
             ProtIntelliFold,
-            inputOrigin=2,
+            inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
             samplingSteps=50,
@@ -136,7 +125,7 @@ class TestProtenix(BaseTest):
     def _runProtenix(self):
         protProtenix = self.newProtocol(
             ProtProtenix,
-            inputOrigin=2,
+            inputOrigin=3,
             entityType=1,
             recyclingSteps=1,
             samplingSteps=50,

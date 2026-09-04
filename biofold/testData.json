@@ -1,0 +1,15 @@
+{
+	"datasets": ["model_building_tutorial"],
+	"skippable": {
+		"gpu": [
+			"test_biofold.TestChai",
+			"test_biofold.TestProtenix"
+		],
+		"dependencies": [
+
+		],
+		"others": [
+
+		]
+	}
+}
