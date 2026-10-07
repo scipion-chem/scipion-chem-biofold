@@ -9,4 +9,4 @@ from .protocol_boltz import ProtBoltz
 from .protocol_chai import ProtChai
 from .protocol_intellifold import ProtIntelliFold
 from .protocol_protenix import ProtProtenix
-
+from .protocol_boltz_cofolding import ProtBoltzCofolding

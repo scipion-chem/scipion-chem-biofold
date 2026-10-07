@@ -26,8 +26,12 @@
 import subprocess
 import unittest
 
-from biofold.protocols import ProtChai, ProtBoltz, ProtIntelliFold, ProtProtenix
+import os
+
+from biofold.protocols import ProtChai, ProtBoltz, ProtIntelliFold, ProtProtenix, ProtBoltzCofolding
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
+from pwem.protocols import ProtImportPdb
+from pwchem.protocols import ProtChemImportSmallMolecules
 
 
 defSetASChain, defSetPDBChain = 'A', 'B'
@@ -143,4 +147,35 @@ class TestProtenix(BaseTest):
         self._runProtenix()
 
 
+class TestBoltzCofolding(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
+        cls.dsLig = DataSet.getDataSet('smallMolecules')
+        setupTestProject(cls)
 
+    def test(self):
+        protPdb = self.newProtocol(ProtImportPdb, inputPdbData=1,
+                                   pdbFile=self.ds.getFile('PDBx_mmCIF/1ake_start.pdb'))
+        self.launchProtocol(protPdb)
+        protMols = self.newProtocol(ProtChemImportSmallMolecules,
+                                    filesPath=self.dsLig.getFile('sdf'), filesPattern='200[01].sdf')
+        self.launchProtocol(protMols)
+
+        # Low settings (and a capped MSA) so it fits small GPUs
+        protCofold = self.newProtocol(ProtBoltzCofolding,
+                                      inputAtomStruct=protPdb.outputPdb,
+                                      inputSmallMolecules=protMols.outputSmallMolecules,
+                                      diffusionSamples=2, recyclingSteps=1, samplingSteps=50,
+                                      maxParallelSamples=1, maxMsaSeqs=512, diffusionSamplesAff=2)
+        self.launchProtocol(protCofold)
+
+        out = getattr(protCofold, 'outputSmallMolecules', None)
+        self.assertIsNotNone(out)
+        self.assertTrue(out.isDocked())
+        self.assertEqual(out.getSize(), 4)
+        for mol in out:
+            self.assertTrue(os.path.exists(mol.getPoseFile()))
+            self.assertTrue(os.path.exists(mol.getProteinFile()))
+            self.assertIsNotNone(mol._boltzAffinity.get())
+            self.assertIsNotNone(mol._boltzIntProbability.get())
