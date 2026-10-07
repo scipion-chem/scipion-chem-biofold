@@ -27,12 +27,18 @@
 import json
 import os
 
-from biofold.protocols import ProtBoltz, ProtChai, ProtIntelliFold, ProtProtenix
+from biofold.protocols import ProtBoltz, ProtChai, ProtIntelliFold, ProtProtenix, ProtBoltzCofolding
 from pwem.objects import AtomStruct, Sequence
 from pwem.wizards import SelectResidueWizard
 from pyworkflow.object import Pointer
 
-from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, SelectElementWizard
+from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, SelectElementWizard, \
+    SelectMultiChainWizard
+
+SelectMultiChainWizard().addTarget(protocol=ProtBoltzCofolding,
+                                   targets=['chains'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['chains'])
 
 SelectChainWizardQT().addTarget(protocol=ProtBoltz,
                                 targets=['inpChain'],

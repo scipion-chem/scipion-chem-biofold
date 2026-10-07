@@ -34,7 +34,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import convertToSdf, getBaseFileName
+from pwchem.utils import convertToSdf, getBaseFileName, getChainIds
 
 from biofold.constants import BOLTZ_DIC
 
@@ -110,8 +110,8 @@ class ProtBoltzCofolding(EMProtocol):
                             'named A, B, ... Spaces and line breaks are ignored.')
         group.addParam('chains', params.StringParam, default='',
                        label='Receptor chains: ', condition=f'receptorOrigin == {FROM_STRUCTURE}',
-                       help='Comma-separated chain ids to include (e.g. A,B). Empty uses every '
-                            'protein chain. Fewer chains make the prediction cheaper.')
+                       help='Chains to include: use the wizard or type comma-separated ids '
+                            '(e.g. A,B). Empty uses every protein chain.')
         group.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
                        label='Ligand set: ')
 
@@ -167,7 +167,7 @@ class ProtBoltzCofolding(EMProtocol):
         with open(ligandsJson, 'w') as f:
             json.dump(ligands, f)
 
-        chains = self.chains.get().replace(' ', '') if self.chains.get() else 'all'
+        chains = self.getChainsArg()
         msaServer = self.msaServerUrl.get() if self.useMsaServer.get() else 'none'
         receptor = self.getSequence() if self.isFromSequence() else self.getOriginalReceptorFile(getLink=False)
         args = f'prepare "{receptor}" "{os.path.abspath(ligandsJson)}" ' \
@@ -196,10 +196,13 @@ class ProtBoltzCofolding(EMProtocol):
 
         Plugin.runCondaCommand(self, ' '.join(args), BOLTZ_DIC, 'boltz predict',
                                gpuIdx=','.join(gpus) if gpus else None)
+        # Boltz names its output boltz_results_<input dir>. Renamed only once it succeeded,
+        # so a continued run still finds (and skips) the predictions already done
+        os.replace(os.path.join(self.getWorkDir(), 'boltz_results_inputs'), self.getResultsDir())
 
     def extractStep(self):
         """Superpose each prediction onto the receptor; write poses, receptors and scores"""
-        predDir = os.path.join(self.getWorkDir(), 'boltz_results_inputs', 'predictions')
+        predDir = os.path.join(self.getResultsDir(), 'predictions')
         args = f'extract "{self.getWorkDir()}" "{predDir}" "{self.getOutputDir()}"'
         Plugin.runScript(self, 'boltzCofold.py', args, env=BOLTZ_DIC, scriptDir=SCRIPTS_DIR)
 
@@ -236,6 +239,9 @@ class ProtBoltzCofolding(EMProtocol):
     def getWorkDir(self):
         return os.path.abspath(self._getExtraPath('boltz'))
 
+    def getResultsDir(self):
+        return os.path.join(self.getWorkDir(), 'boltz_results')
+
     def getOutputDir(self):
         return os.path.abspath(self._getPath('outputLigands'))
 
@@ -249,6 +255,17 @@ class ProtBoltzCofolding(EMProtocol):
         if not getattr(self, USE_GPU).get():
             return []
         return [g.strip() for g in getattr(self, GPU_LIST).get().split(',') if g.strip()]
+
+    def getChainsArg(self):
+        """Chain ids for the script: 'all', or 'A,B' from typed ids or the wizard's JSON"""
+        value = (self.chains.get() or '').strip()
+        if not value:
+            return 'all'
+        try:
+            chainIds = getChainIds(value)
+        except ValueError:  # typed ids, not wizard JSON
+            chainIds = value.split(',')
+        return ','.join(c.strip() for c in chainIds)
 
     def isFromSequence(self):
         return self.receptorOrigin.get() == FROM_SEQUENCE
