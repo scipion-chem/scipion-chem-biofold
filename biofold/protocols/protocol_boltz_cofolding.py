@@ -128,7 +128,7 @@ class ProtBoltzCofolding(EMProtocol):
                        help='Lower it (e.g. 512-1024) to reduce GPU memory use.')
 
         form.addSection(label='Parameters')
-        form.addParam('diffusionSamples', params.IntParam, default=10,
+        form.addParam('diffusionSamples', params.IntParam, default=4,
                       label='Poses per ligand: ',
                       help='Number of diffusion samples (predicted complexes) per ligand.')
         form.addParam('infPot', params.BooleanParam, default=True,
