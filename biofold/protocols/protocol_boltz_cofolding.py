@@ -71,7 +71,9 @@ class ProtBoltzCofolding(EMProtocol):
 
     Output columns:
       - _boltzAffinity: predicted log10(IC50) in uM (lower binds stronger).
-        Computed on the top-ranked model and copied to every pose of the ligand.
+        One value per ligand (copied to all its poses): the affinity model takes
+        the top-ranked pose, crops the pocket around the ligand, re-samples it and
+        predicts the affinity on its best-ipTM sample.
       - _boltzIntProbability: probability that the ligand is a binder (0-1).
       - _boltzConfidence: Boltz confidence score used to rank the models.
       - _boltzIpTM: ligand interface pTM.
@@ -135,9 +137,16 @@ class ProtBoltzCofolding(EMProtocol):
                       label="Inference potentials: ",
                       help='Use steering potentials to improve the physical plausibility of the poses.')
         form.addParam('recyclingSteps', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
-                      label='Recycling steps: ')
+                      label='Recycling steps: ',
+                      help='Times the trunk (pairformer) feeds its output back as input to refine '
+                           'the pair representation before the structure is generated. More '
+                           'steps can improve hard cases; each extra step adds roughly one '
+                           'trunk pass of compute.')
         form.addParam('samplingSteps', params.IntParam, default=200, expertLevel=params.LEVEL_ADVANCED,
-                      label='Sampling steps: ')
+                      label='Sampling steps: ',
+                      help='Denoising steps of the diffusion module used to build each pose from '
+                           'noise. Fewer steps are faster but give rougher, less accurate '
+                           'structures. Boltz default: 200.')
         form.addParam('stepScale', params.FloatParam, default=1.638, expertLevel=params.LEVEL_ADVANCED,
                       label='Step scale: ',
                       help='Diffusion temperature: lower values give more diverse samples.')
@@ -148,8 +157,21 @@ class ProtBoltzCofolding(EMProtocol):
                       label="Molecular weight correction: ", expertLevel=params.LEVEL_ADVANCED,
                       help='Apply the molecular weight correction to the affinity prediction.')
         form.addParam('diffusionSamplesAff', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED,
-                      label='Diffusion samples for affinity: ')
-
+                      label='Diffusion samples for affinity: ',
+                      help='The affinity is predicted by a separate Boltz-2 affinity model. It '
+                           'takes the top-ranked pose, crops it to the pocket around the ligand '
+                           '(up to 256 residues/ligand tokens), runs its trunk once and then '
+                           're-samples the cropped complex this many times. The '
+                           'sample with the best ipTM is used to predict the affinity; the samples '
+                           'are not written out. One affinity value per ligand, whatever the number '
+                           'of output poses. More samples cost time linearly (they run one by '
+                           'one).')
+        form.addParam('samplingStepsAff', params.IntParam, default=200, expertLevel=params.LEVEL_ADVANCED,
+                      label='Sampling steps for affinity: ',
+                      help='Denoising steps the affinity model uses for each of its own samples '
+                           '(see "Diffusion samples for affinity"). Lowering it speeds up the '
+                           'affinity stage, at the cost of a rougher pose to predict the affinity '
+                           'from.')
         form.addParallelSection(threads=2, mpi=0)
 
     # --------------------------- STEPS functions ------------------------------
@@ -187,6 +209,7 @@ class ProtBoltzCofolding(EMProtocol):
                 f'--step_scale {self.stepScale.get()}',
                 f'--max_msa_seqs {self.maxMsaSeqs.get()}',
                 f'--diffusion_samples_affinity {self.diffusionSamplesAff.get()}',
+                f'--sampling_steps_affinity {self.samplingStepsAff.get()}',
                 f'--num_workers {self.numberOfThreads.get()}']
         if self.infPot.get():
             args.append('--use_potentials')
