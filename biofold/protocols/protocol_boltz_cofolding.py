@@ -38,7 +38,7 @@ from pwchem.utils import convertToSdf, getBaseFileName, getChainIds
 
 from biofold.constants import BOLTZ_DIC
 
-FROM_STRUCTURE, FROM_SEQUENCE = 0, 1
+FROM_STRUCTURE, FROM_SEQUENCE, FROM_SET = 0, 1, 2
 AMINO_ACIDS = set('ACDEFGHIKLMNPQRSTVWYX')
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'scripts')
@@ -100,8 +100,15 @@ class ProtBoltzCofolding(EMProtocol):
         form.addSection(label='Input')
         group = form.addGroup('Input specifications')
         group.addParam('receptorOrigin', params.EnumParam, default=FROM_STRUCTURE,
-                       label='Receptor from: ', choices=['Structure', 'Sequence'],
-                       display=params.EnumParam.DISPLAY_HLIST)
+                       label='Receptor from: ', choices=['Structure', 'Sequence', 'SetOfSequences'],
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help='Where the receptor comes from:\n\n'
+                            '- *Structure*: an AtomStruct object. Its protein chains (or the ones '
+                            'selected) are cofolded, and every prediction is superposed onto it.\n'
+                            '- *Sequence*: type or paste the protein sequence in one-letter code; '
+                            'separate the chains of a complex with ":".\n'
+                            '- *SetOfSequences*: pick one or several sequences from a '
+                            'SetOfSequences object; each becomes one chain.\n\n')
         group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                        label='Receptor structure: ', condition=f'receptorOrigin == {FROM_STRUCTURE}',
                        help='Its protein chains are cofolded with every ligand.')
@@ -110,6 +117,13 @@ class ProtBoltzCofolding(EMProtocol):
                        help='Protein sequence in one-letter code. Separate the chains of a '
                             'complex with ":" (e.g. MKV...:MKV... for a homodimer); they are '
                             'named A, B, ... Spaces and line breaks are ignored.')
+        group.addParam('inputSetOfSequences', params.PointerParam, pointerClass='SetOfSequences',
+                       allowsNull=True, label='Receptor sequences: ',
+                       condition=f'receptorOrigin == {FROM_SET}')
+        group.addParam('chooseSeqs', params.StringParam, default='All',
+                       label='Sequences to use: ', condition=f'receptorOrigin == {FROM_SET}',
+                       help='Sequences of the set that form the receptor, one chain each (named '
+                            'A, B, ... in set order). Use the wizard, or "All".')
         group.addParam('chains', params.StringParam, default='',
                        label='Receptor chains: ', condition=f'receptorOrigin == {FROM_STRUCTURE}',
                        help='Chains to include: use the wizard or type comma-separated ids '
@@ -291,9 +305,16 @@ class ProtBoltzCofolding(EMProtocol):
         return ','.join(c.strip() for c in chainIds)
 
     def isFromSequence(self):
-        return self.receptorOrigin.get() == FROM_SEQUENCE
+        """Receptor given as sequences (typed or from a set), so no input structure"""
+        return self.receptorOrigin.get() != FROM_STRUCTURE
 
     def getSequence(self):
+        """Receptor chains as SEQ1:SEQ2:..."""
+        if self.receptorOrigin.get() == FROM_SET:
+            chosen = {n.strip() for n in (self.chooseSeqs.get() or '').split(',')}
+            seqs = [seq.getSequence() for seq in self.inputSetOfSequences.get()
+                    if 'All' in chosen or seq.getSeqName() in chosen]
+            return ':'.join(seqs).upper()
         return re.sub(r'\s', '', self.inputSequence.get() or '').upper()
 
     def getOriginalReceptorFile(self, getLink=True):
@@ -327,10 +348,12 @@ class ProtBoltzCofolding(EMProtocol):
 
     def _validate(self):
         errors = []
-        if self.isFromSequence():
+        if self.receptorOrigin.get() == FROM_SET and not self.inputSetOfSequences.get():
+            errors.append('A receptor SetOfSequences is required.')
+        elif self.isFromSequence():
             chains = self.getSequence().split(':')
             if not all(chains):
-                errors.append('Empty receptor sequence (or empty chain between ":").')
+                errors.append('Empty receptor sequence: no sequence selected, or an empty chain between ":".')
             badChars = set(''.join(chains)) - AMINO_ACIDS
             if badChars:
                 errors.append(f'Invalid characters in the receptor sequence: {"".join(sorted(badChars))}')

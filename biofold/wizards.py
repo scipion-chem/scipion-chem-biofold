@@ -33,12 +33,17 @@ from pwem.wizards import SelectResidueWizard
 from pyworkflow.object import Pointer
 
 from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, SelectElementWizard, \
-    SelectMultiChainWizard
+    SelectMultiChainWizard, SelectMultiSeqWizard
 
 SelectMultiChainWizard().addTarget(protocol=ProtBoltzCofolding,
                                    targets=['chains'],
                                    inputs=['inputAtomStruct'],
                                    outputs=['chains'])
+
+SelectMultiSeqWizard().addTarget(protocol=ProtBoltzCofolding,
+                                 targets=['chooseSeqs'],
+                                 inputs=['inputSetOfSequences'],
+                                 outputs=['chooseSeqs'])
 
 SelectChainWizardQT().addTarget(protocol=ProtBoltz,
                                 targets=['inpChain'],
