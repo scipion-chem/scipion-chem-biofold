@@ -147,7 +147,7 @@ class ProtBoltzCofolding(EMProtocol):
         group.addParam('smilesHeader', params.StringParam, default='SMI',
                        label='SMILES column: ', condition=f'ligandOrigin == {FROM_LIBRARY}',
                        help='Library column holding the SMILES. Use the wizard to pick it. Ligands are '
-                            'named from the "Name" column when the library has one.')
+                            'named from the "NAME" column when the library has one.')
 
         group = form.addGroup('MSA')
         group.addParam('useMsaServer', params.BooleanParam, default=True,
@@ -332,7 +332,7 @@ class ProtBoltzCofolding(EMProtocol):
         library = self.getLibrary()
         headers = library.getHeaders()
         smiIdx = headers.index(self.smilesHeader.get())
-        nameIdx = headers.index('Name') if 'Name' in headers else None
+        nameIdx = headers.index('NAME') if 'NAME' in headers else None
         ligands = {}
         with open(library.getFileName()) as f:
             for i, line in enumerate(f, 1):
