@@ -55,9 +55,10 @@ def sequenceChains(sequences):
             for cid, seq in zip(string.ascii_uppercase, sequences.split(':')) if seq.strip()]
 
 
-def ligandSmiles(molFile):
-    """Canonical SMILES of the largest fragment of the first molecule in an SDF"""
-    mol = Chem.MolFromMolFile(molFile)
+def ligandSmiles(lig):
+    """Canonical SMILES of the largest fragment of a ligand given as SMILES or as an SDF file
+    (first molecule)"""
+    mol = Chem.MolFromSmiles(lig['smiles']) if 'smiles' in lig else Chem.MolFromMolFile(lig['file'])
     if mol is None:
         return None
     mol = max(Chem.GetMolFrags(mol, asMols=True), key=lambda m: m.GetNumHeavyAtoms())
@@ -98,9 +99,9 @@ def prepare(recFile, ligandsJson, workDir, chains, msaServer):
 
     ligands = {}
     for lig in json.load(open(ligandsJson)):
-        smi = ligandSmiles(lig['file'])
+        smi = ligandSmiles(lig)
         if not smi:
-            print(f"Warning: could not read {lig['file']}; ligand {lig['id']} skipped")
+            print(f"Warning: could not read ligand {lig['id']} ({lig.get('smiles') or lig['file']}); skipped")
             continue
         ligands[lig['id']] = smi
         job = {'version': 1,

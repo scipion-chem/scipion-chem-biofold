@@ -32,6 +32,7 @@ from pwem.objects import AtomStruct, Sequence
 from pwem.wizards import SelectResidueWizard
 from pyworkflow.object import Pointer
 
+from pwchem.wizards.wizard_select_attribute import SelectHeadersLibrary
 from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, SelectElementWizard, \
     SelectMultiChainWizard, SelectMultiSeqWizard
 
@@ -44,6 +45,11 @@ SelectMultiSeqWizard().addTarget(protocol=ProtBoltzCofolding,
                                  targets=['chooseSeqs'],
                                  inputs=['inputSetOfSequences'],
                                  outputs=['chooseSeqs'])
+
+SelectHeadersLibrary().addTarget(protocol=ProtBoltzCofolding,
+                                 targets=['smilesHeader'],
+                                 inputs=[],
+                                 outputs=['smilesHeader'])
 
 SelectChainWizardQT().addTarget(protocol=ProtBoltz,
                                 targets=['inpChain'],

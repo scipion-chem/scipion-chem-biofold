@@ -39,7 +39,13 @@ from pwchem.utils import convertToSdf, getBaseFileName, getChainIds
 from biofold.constants import BOLTZ_DIC
 
 FROM_STRUCTURE, FROM_SEQUENCE, FROM_SET = 0, 1, 2
+FROM_MOLS, FROM_LIBRARY = 0, 1
 AMINO_ACIDS = set('ACDEFGHIKLMNPQRSTVWYX')
+
+def safeName(name):
+    """Filesystem-safe version of a molecule name"""
+    return re.sub(r'[^A-Za-z0-9_.-]', '_', name)
+
 
 SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'scripts')
 
@@ -128,8 +134,20 @@ class ProtBoltzCofolding(EMProtocol):
                        label='Receptor chains: ', condition=f'receptorOrigin == {FROM_STRUCTURE}',
                        help='Chains to include: use the wizard or type comma-separated ids '
                             '(e.g. A,B). Empty uses every protein chain.')
+        group.addParam('ligandOrigin', params.EnumParam, default=FROM_MOLS,
+                       label='Ligands from: ', choices=['SetOfSmallMolecules', 'SmallMoleculesLibrary'],
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       help='- *SetOfSmallMolecules*: molecule files (converted to SMILES).\n'
+                            '- *SmallMoleculesLibrary*: a SMILES table; the SMILES are used directly, '
+                            'with no file conversion.')
         group.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                       label='Ligand set: ')
+                       label='Ligand set: ', condition=f'ligandOrigin == {FROM_MOLS}', allowsNull=True)
+        group.addParam('inputLibrary', params.PointerParam, pointerClass='SmallMoleculesLibrary',
+                       label='Ligand library: ', condition=f'ligandOrigin == {FROM_LIBRARY}', allowsNull=True)
+        group.addParam('smilesHeader', params.StringParam, default='SMI',
+                       label='SMILES column: ', condition=f'ligandOrigin == {FROM_LIBRARY}',
+                       help='Library column holding the SMILES. Use the wizard to pick it. Ligands are '
+                            'named from the "Name" column when the library has one.')
 
         group = form.addGroup('MSA')
         group.addParam('useMsaServer', params.BooleanParam, default=True,
@@ -197,8 +215,17 @@ class ProtBoltzCofolding(EMProtocol):
 
     def prepareStep(self):
         """Ligands to SDF, then receptor MSA (once) + one Boltz YAML per ligand"""
-        ligands = [{'id': ligId, 'file': os.path.abspath(convertToSdf(self, mol.getFileName()))}
-                   for ligId, mol in self.getInputMolsDic().items()]
+        if self.isFromLibrary():
+            # One .smi per ligand, so each output molecule has its own input file
+            os.makedirs(self._getExtraPath('libraryLigands'), exist_ok=True)
+            ligands = []
+            for ligId, (name, smi) in self.getLibraryLigands().items():
+                with open(self.getLibraryMolFile(ligId), 'w') as f:
+                    f.write(f'{smi}\t{name}\n')
+                ligands.append({'id': ligId, 'smiles': smi})
+        else:
+            ligands = [{'id': ligId, 'file': os.path.abspath(convertToSdf(self, mol.getFileName()))}
+                       for ligId, mol in self.getInputMolsDic().items()]
         ligandsJson = self._getExtraPath('ligands.json')
         with open(ligandsJson, 'w') as f:
             json.dump(ligands, f)
@@ -270,7 +297,8 @@ class ProtBoltzCofolding(EMProtocol):
         outputSet.setProteinFile(self.getOriginalReceptorFile())
         outputSet.setDocked(True)
         self._defineOutputs(outputSmallMolecules=outputSet)
-        self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+        self._defineSourceRelation(self.inputLibrary if self.isFromLibrary() else self.inputSmallMolecules,
+                                   outputSet)
 
     # --------------------------- UTILS functions -----------------------------------
     def getWorkDir(self):
@@ -285,8 +313,40 @@ class ProtBoltzCofolding(EMProtocol):
     def getInputMolsDic(self):
         """Boltz job id -> input molecule. The id is also the YAML/record name, so it
         must be filesystem-safe and unique (molName alone may repeat across conformers)."""
-        return {f"{re.sub(r'[^A-Za-z0-9_.-]', '_', mol.getMolName())}_{mol.getObjId()}": mol.clone()
+        if self.isFromLibrary():
+            return {ligId: SmallMolecule(smallMolFilename=self.getLibraryMolFile(ligId), molName=name)
+                    for ligId, (name, _) in self.getLibraryLigands().items()}
+        return {f"{safeName(mol.getMolName())}_{mol.getObjId()}": mol.clone()
                 for mol in self.inputSmallMolecules.get()}
+
+    def isFromLibrary(self):
+        return self.ligandOrigin.get() == FROM_LIBRARY
+
+    def getLibrary(self):
+        """Used by the SMILES column wizard"""
+        return self.inputLibrary.get()
+
+    def getLibraryLigands(self):
+        """Boltz job id -> (name, SMILES) for every library row with a SMILES.
+        The library file has no header line; its columns follow getHeaders()."""
+        library = self.getLibrary()
+        headers = library.getHeaders()
+        smiIdx = headers.index(self.smilesHeader.get())
+        nameIdx = headers.index('Name') if 'Name' in headers else None
+        ligands = {}
+        with open(library.getFileName()) as f:
+            for i, line in enumerate(f, 1):
+                row = line.rstrip('\n').split(library.getSeparator())
+                smi = row[smiIdx].strip() if len(row) > smiIdx else ''
+                if not smi:
+                    continue
+                name = row[nameIdx].strip() if nameIdx is not None and len(row) > nameIdx else ''
+                name = name or f'mol{i}'
+                ligands[f'{safeName(name)}_{i}'] = (name, smi)
+        return ligands
+
+    def getLibraryMolFile(self, ligId):
+        return os.path.abspath(self._getExtraPath('libraryLigands', f'{ligId}.smi'))
 
     def getGpuIds(self):
         if not getattr(self, USE_GPU).get():
@@ -340,7 +400,9 @@ class ProtBoltzCofolding(EMProtocol):
             summary.append(f'Receptor: {len(chains)} sequence(s), {sum(map(len, chains))} residues')
         elif self.inputAtomStruct.get():
             summary.append(f'Receptor: {os.path.basename(self.inputAtomStruct.get().getFileName())}')
-        if self.inputSmallMolecules.get():
+        if self.isFromLibrary() and self.inputLibrary.get():
+            summary.append(f'Ligands: library of {self.inputLibrary.get().getLength()} molecule(s)')
+        elif not self.isFromLibrary() and self.inputSmallMolecules.get():
             summary.append(f'Ligands: {self.inputSmallMolecules.get().getSize()} molecule(s)')
         if self.hasAttribute('outputSmallMolecules'):
             summary.append(f'Output poses: {self.outputSmallMolecules.getSize()}')
@@ -359,6 +421,15 @@ class ProtBoltzCofolding(EMProtocol):
                 errors.append(f'Invalid characters in the receptor sequence: {"".join(sorted(badChars))}')
         elif not self.inputAtomStruct.get():
             errors.append('A receptor structure is required.')
+
+        if self.isFromLibrary():
+            if not self.inputLibrary.get():
+                errors.append('A ligand library is required.')
+            elif self.smilesHeader.get() not in self.inputLibrary.get().getHeaders():
+                errors.append(f'SMILES column "{self.smilesHeader.get()}" is not in the library headers: '
+                              f'{", ".join(self.inputLibrary.get().getHeaders())}')
+        elif not self.inputSmallMolecules.get():
+            errors.append('A ligand set is required.')
         return errors
 
     def _methods(self):
