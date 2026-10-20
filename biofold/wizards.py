@@ -34,6 +34,23 @@ from pyworkflow.object import Pointer
 
 from pwchem.wizards.wizard_select_chain import SelectChainWizardQT, SelectResidueWizardQT, SelectElementWizard
 
+
+def addSmilesToInputList(form, protocol, smilesParam, outParam, **extraFields):
+    smiles = (getattr(protocol, smilesParam).get() or '').strip()
+    if not smiles:
+        raise Exception('Please write a SMILES string before adding it to the list of inputs.')
+
+    prevStr = getattr(protocol, outParam).get()
+    lenPrev = len(prevStr.strip().split('\n')) + 1
+    if prevStr.strip() == '':
+        lenPrev -= 1
+    elif not prevStr.endswith('\n'):
+        prevStr += '\n'
+
+    inpDic = {"name": "ligand_{}".format(lenPrev), "smiles": smiles, "entity": "ligand"}
+    inpDic.update(extraFields)
+    form.setVar(outParam, prevStr + '{}) {}\n'.format(lenPrev, json.dumps(inpDic)))
+
 SelectChainWizardQT().addTarget(protocol=ProtBoltz,
                                 targets=['inpChain'],
                                 inputs=[{'inputOrigin': ['inputSequence', 'inputSequenceFromSet',
@@ -104,6 +121,11 @@ class AddSequenceWizardBoltz(SelectResidueWizard):
     def show(self, form, *params):
         protocol = form.protocol
         inputParams, outputParam = self.getInputOutput(form)
+
+        if protocol.inputOrigin.get() == 4:
+            addSmilesToInputList(form, protocol, inputParams[0], outputParam[0],
+                                 affinity=str(protocol.affinityBinder.get()))
+            return
 
         # StructName
         inputObj = getattr(protocol, inputParams[0]).get()
@@ -183,7 +205,9 @@ AddSequenceWizardBoltz().addTarget(protocol=ProtBoltz,
                                    inputs=[{'inputOrigin': [
                                        'inputSequence',
                                        'inputSequenceFromSet',
-                                       'inputAtomStruct'
+                                       'inputAtomStruct',
+                                       'file',
+                                       'inputSmiles'
                                    ]},
                                        'inpChain',
                                        'inpPositions'],
@@ -196,6 +220,10 @@ class AddSequenceWizardBiofold(SelectResidueWizard):
     def show(self, form, *params):
         protocol = form.protocol
         inputParams, outputParam = self.getInputOutput(form)
+
+        if protocol.inputOrigin.get() == 4:
+            addSmilesToInputList(form, protocol, inputParams[0], outputParam[0])
+            return
 
         # StructName
         inputObj = getattr(protocol, inputParams[0]).get()
@@ -275,7 +303,9 @@ AddSequenceWizardBiofold().addTarget(protocol=ProtChai,
                                      inputs=[{'inputOrigin': [
                                          'inputSequence',
                                          'inputSequenceFromSet',
-                                         'inputAtomStruct'
+                                         'inputAtomStruct',
+                                         'file',
+                                         'inputSmiles'
                                      ]},
                                          'inpChain',
                                          'inpPositions'],

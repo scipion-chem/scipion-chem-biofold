@@ -73,6 +73,9 @@ class ProtChai(EMProtocol):
              explicitly defined.
            - FASTA headers are reformatted to comply with Chai-1 requirements.
 
+        4. **SMILES**:
+           - SMILES string of a small molecule, added as a ligand entity.
+
         Additional input options:
         - **entityType**: Define biological type (Protein, DNA, RNA).
         - **inpChain**: Specify chain when using AtomStruct input.
@@ -152,7 +155,6 @@ class ProtChai(EMProtocol):
         enabling reproducible and automated structural modelling workflows.
     """
     _label = 'chai-1 modelling'
-    NEWFILE = False
 
     # -------------------------- DEFINE param functions ----------------------
     @classmethod
@@ -175,7 +177,11 @@ class ProtChai(EMProtocol):
                       label="Input structure: ", condition='inputOrigin==2',
                       help='Select the AtomStruct object whose sequence to add to the set')
 
-        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin != 3',
+        form.addParam('inputSmiles', params.StringParam, allowsNull=True,
+                      label="Input SMILES: ", condition='inputOrigin==4',
+                      help='SMILES string of the small molecule (ligand) to add to the modelling input.')
+
+        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin not in [3, 4]',
                       label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
                       help='Input entity type to add to the set')
 
@@ -183,7 +189,7 @@ class ProtChai(EMProtocol):
                       label='Input chain: ', condition='inputOrigin == 2',
                       help='Specify the protein chain to use as sequence.')
 
-        form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 3',
+        form.addParam('inpPositions', params.StringParam, condition='inputOrigin not in [3, 4]',
                       label='Input positions: ',
                       help='Specify the positions of the sequence to add in the output.')
 
@@ -206,7 +212,7 @@ class ProtChai(EMProtocol):
 
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                      label='Input origin: ', choices=['Sequence','SetOfSequences','AtomStruct', 'fasta file'],
+                      label='Input origin: ', choices=['Sequence','SetOfSequences','AtomStruct', 'fasta file', 'SMILES'],
                       help='Input origin to add to the set')
         self._addInputForm(form)
 
@@ -265,15 +271,17 @@ class ProtChai(EMProtocol):
                     continue
 
                 base_name = inpDict.get("name", "unknown")
-                seqFile = inpDict.get("seqFile")
                 entity = inpDict.get("entity", "protein").lower()
 
-                sequence = ""
-                with open(seqFile) as sf:
-                    for l in sf:
-                        if l.startswith(">"):
-                            continue
-                        sequence += l.strip()
+                if entity == "ligand":
+                    sequence = inpDict["smiles"]
+                else:
+                    sequence = ""
+                    with open(inpDict.get("seqFile")) as sf:
+                        for l in sf:
+                            if l.startswith(">"):
+                                continue
+                            sequence += l.strip()
 
                 uniqueName = f"{base_name}_{counter}"
                 counter += 1
@@ -281,10 +289,7 @@ class ProtChai(EMProtocol):
                 f.write(f"{sequence}\n")
 
     def runChaiStep(self):
-        if (self.inputOrigin.get() == 2 and not self.NEWFILE):
-            filePath = os.path.abspath(self.file.get())
-        else:
-            filePath = os.path.abspath(self._getPath('input.fasta'))
+        filePath = os.path.abspath(self._getPath('input.fasta'))
         args = [str(filePath)]
 
         args.append(os.path.join(os.path.abspath(self._getPath()), "chai_results"))
@@ -543,8 +548,6 @@ class ProtChai(EMProtocol):
                 counter += 1
         with open(outputPath, 'w') as f:
             f.writelines(fixedLines)
-
-        self.NEWFILE = True
 
     def writeSequence(self, entityType, header, sequence, counter, fixedLines):
         # Ensure header isn't empty after sanitization

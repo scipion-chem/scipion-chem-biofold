@@ -31,7 +31,7 @@ import os
 import pyworkflow.protocol.params as params
 from biofold.objects import BoltzEntity
 from pwem.protocols import EMProtocol
-from pyworkflow.object import String
+from pyworkflow.object import String, Float
 import shutil
 
 from pwchem import Plugin
@@ -79,6 +79,10 @@ class ProtBoltz(EMProtocol):
     3. **FASTA file**:
        - Direct input of a FASTA file containing one or more sequences.
        - Entity type (protein/DNA/RNA) is automatically inferred.
+
+    4. **SMILES**:
+       - SMILES string of a small molecule, added as a ligand entity.
+       - One ligand can be marked for binding affinity prediction.
 
     Additional input options:
     - **entityType**: Define biological type (Protein, DNA, RNA).
@@ -174,7 +178,17 @@ class ProtBoltz(EMProtocol):
                       label="Input structure: ", condition='inputOrigin==2',
                       help='Select the AtomStruct object whose sequence to add to the set')
 
-        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin != 3',
+        form.addParam('inputSmiles', params.StringParam, allowsNull=True,
+                      label="Input SMILES: ", condition='inputOrigin==4',
+                      help='SMILES string of the small molecule (ligand) to add to the modelling input.')
+
+        form.addParam('affinityBinder', params.BooleanParam, default=False,
+                      label="Predict affinity for this ligand: ", condition='inputOrigin==4',
+                      help='Mark this ligand as the binder for Boltz-2 affinity prediction. '
+                           'Only one ligand of the input list can be marked, and it cannot be '
+                           'repeated (affinity is not computed for ligands with multiple copies).')
+
+        form.addParam('entityType', params.EnumParam, default=0, condition='inputOrigin not in [3, 4]',
                       label='Input entity type: ', choices=['Protein', 'DNA', 'RNA'],
                       help='Input entity type to add to the set')
 
@@ -182,11 +196,11 @@ class ProtBoltz(EMProtocol):
                       label='Input chain: ', condition='inputOrigin == 2',
                       help='Specify the protein chain to use as sequence.')
 
-        form.addParam('inpPositions', params.StringParam, condition='inputOrigin != 3',
+        form.addParam('inpPositions', params.StringParam, condition='inputOrigin not in [3, 4]',
                       label='Input positions: ',
                       help='Specify the positions of the sequence to add in the output.')
 
-        form.addParam('cyclic', params.BooleanParam, default=False,
+        form.addParam('cyclic', params.BooleanParam, default=False, condition='inputOrigin != 4',
                       label="Cyclic: ",
                       help='Choose whether the input is cyclic or not.')
 
@@ -210,7 +224,7 @@ class ProtBoltz(EMProtocol):
 
         form.addSection(label='Input')
         form.addParam('inputOrigin', params.EnumParam, default=0,
-                       label='Input origin: ', choices=['Sequence','SetOfSequences','AtomStruct', 'fasta file'],
+                       label='Input origin: ', choices=['Sequence','SetOfSequences','AtomStruct', 'fasta file', 'SMILES'],
                        help='Input origin to add to the set')
         self._addInputForm(form)
 
@@ -334,20 +348,26 @@ class ProtBoltz(EMProtocol):
             if not inputLine.strip():
                 continue
 
-            inpJson = json.loads(inputLine.split(')')[1].strip())
-            seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
-            _, sequence = next(iter(seqDic.items()))
-            entity = inpJson.get('entity', 'protein')
-            cyclic = inpJson.get('cyclic', False)
-
+            inpJson = json.loads(inputLine.split(')', 1)[1].strip())
+            entityType = inpJson.get('entity', 'protein')
             chainId = next(chainIdIiter)
 
-            entity = BoltzEntity(
-                entity_type=entity,
-                chain_id=chainId,
-                sequence=sequence,
-                cyclic=cyclic
-            )
+            if entityType == 'ligand':
+                entity = BoltzEntity(
+                    entity_type=entityType,
+                    chain_id=chainId,
+                    smiles=inpJson['smiles'],
+                    affinity=str(inpJson.get('affinity', False)) == 'True'
+                )
+            else:
+                seqDic = parseFasta(os.path.abspath(inpJson['seqFile']))
+                _, sequence = next(iter(seqDic.items()))
+                entity = BoltzEntity(
+                    entity_type=entityType,
+                    chain_id=chainId,
+                    sequence=sequence,
+                    cyclic=str(inpJson.get('cyclic', False)) == 'True'
+                )
             entities.append(entity)
 
         merged = {}
@@ -358,31 +378,41 @@ class ProtBoltz(EMProtocol):
                 e.smiles,
                 e.ccd,
                 e.msa,
-                e.cyclic
+                e.cyclic,
+                e.affinity
             )
             if key not in merged:
                 merged[key] = e
             else:
                 merged[key].ids.extend(e.ids)
 
-        sequences = []
+        sequences, properties = [], []
         for e in merged.values():
-            body = {
-                "id": e.ids if len(e.ids) > 1 else e.ids[0],
-                "cyclic": e.cyclic
-            }
+            body = {"id": e.ids if len(e.ids) > 1 else e.ids[0]}
 
             if e.entity_type in ("protein", "dna", "rna"):
                 body["sequence"] = e.sequence
+                body["cyclic"] = e.cyclic
                 if e.msa:
                     body["msa"] = e.msa
+            elif e.entity_type == "ligand":
+                if e.smiles:
+                    body["smiles"] = e.smiles
+                else:
+                    body["ccd"] = e.ccd
+                if e.affinity:
+                    properties.append({"affinity": {"binder": e.ids[0]}})
 
             sequences.append({e.entity_type: body})
+
+        inputDic = {"sequences": sequences}
+        if properties:
+            inputDic["properties"] = properties
 
         jsonPath = os.path.abspath(self._getPath("input.json"))
 
         with open(jsonPath, "w") as f:
-            json.dump({"sequences": sequences}, f, indent=2)
+            json.dump(inputDic, f, indent=2)
 
 
 
@@ -486,6 +516,10 @@ class ProtBoltz(EMProtocol):
         bestStruct.origin = String()
         bestStruct.setAttributeValue('origin', 'Boltz')
 
+        affinityData = self.readAffinity(inputFolder)
+        for key, value in affinityData.items():
+            setattr(bestStruct, key, Float(value))
+
         # Optional: write summary file
         resultsFile = os.path.join(self._getPath(), 'results.txt')
         with open(resultsFile, 'w') as f:
@@ -493,6 +527,8 @@ class ProtBoltz(EMProtocol):
             for name in sorted(scores.keys()):
                 f.write(f"{name}\t{scores[name]:.3f}\n")
             f.write(f"BEST\t{bestModel}\t{scores[bestModel]:.3f}\n")
+            for key, value in affinityData.items():
+                f.write(f"{key}\t{value:.3f}\n")
 
         self._defineOutputs(
             outputBestAtomStruct=bestStruct,
@@ -523,6 +559,29 @@ class ProtBoltz(EMProtocol):
 
     def _validate(self):
         validations = []
+        if self.inputOrigin.get() == 3:
+            return validations
+
+        ligandCounts, binders = {}, []
+        for inputLine in self.inputList.get().split('\n'):
+            if not inputLine.strip():
+                continue
+            try:
+                inpJson = json.loads(inputLine.split(')', 1)[1].strip())
+            except (IndexError, ValueError):
+                validations.append(f'Could not parse input line: {inputLine}')
+                continue
+            if inpJson.get('entity') == 'ligand':
+                smiles = inpJson.get('smiles', '')
+                ligandCounts[smiles] = ligandCounts.get(smiles, 0) + 1
+                if str(inpJson.get('affinity', False)) == 'True':
+                    binders.append(smiles)
+
+        if len(binders) > 1:
+            validations.append('Only one ligand can be marked for affinity prediction in Boltz-2.')
+        elif binders and ligandCounts[binders[0]] > 1:
+            validations.append('Boltz-2 cannot compute affinity for a ligand that has multiple copies. '
+                               'Remove the repeated SMILES or unmark it for affinity prediction.')
         return validations
 
     def _warnings(self):
@@ -543,5 +602,13 @@ class ProtBoltz(EMProtocol):
             return 'rna'
 
         return 'dna'
+
+    def readAffinity(self, inputFolder):
+        affinityFiles = [f for f in os.listdir(inputFolder)
+                         if f.startswith('affinity_') and f.endswith('.json')]
+        if not affinityFiles:
+            return {}
+        with open(os.path.join(inputFolder, affinityFiles[0])) as f:
+            return json.load(f)
 
 

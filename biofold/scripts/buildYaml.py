@@ -12,6 +12,8 @@ def main(json_path, yaml_path):
         "version": 1,
         "sequences": data["sequences"]
     }
+    if data.get("properties"):
+        boltz_yaml["properties"] = data["properties"]
 
     with open(yaml_path, "w") as f:
         yaml.safe_dump(boltz_yaml, f, sort_keys=False)
