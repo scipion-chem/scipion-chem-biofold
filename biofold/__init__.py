@@ -65,6 +65,12 @@ class Plugin(pwchemPlugin):
         ).addCommand(
             f"{cls.getEnvActivationCommand(BOLTZ_DIC)} && "
             "git clone --branch v2.2.1 --depth 1 https://github.com/jwohlwend/boltz.git && "
+            # boltz only pins torch>=2.2, so installing boltz[cuda] first pulls the
+            # latest wheel (currently cu130), which needs a very recent driver
+            # (CUDA 13) and fails CUDA init on common 12.x drivers. Install a
+            # CUDA 12.4 torch first -- it runs on any driver supporting CUDA >=12.4
+            # -- so boltz then sees torch>=2.2 satisfied and keeps this build.
+            "pip install torch --index-url https://download.pytorch.org/whl/cu124 && "
             "pip install --editable ./boltz[cuda]",
             f"{BOLTZ_DIC['name']}_installed"
         )
