@@ -281,10 +281,7 @@ class ProtChai(EMProtocol):
                 f.write(f"{sequence}\n")
 
     def runChaiStep(self):
-        if (self.inputOrigin.get() == 2 and not self.NEWFILE):
-            filePath = os.path.abspath(self.file.get())
-        else:
-            filePath = os.path.abspath(self._getPath('input.fasta'))
+        filePath = os.path.abspath(self._getPath('input.fasta'))
         args = [str(filePath)]
 
         args.append(os.path.join(os.path.abspath(self._getPath()), "chai_results"))
