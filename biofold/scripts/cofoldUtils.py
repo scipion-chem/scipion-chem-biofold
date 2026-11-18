@@ -148,8 +148,20 @@ def ligandPLDDT(ligChain):
     (Boltz and Protenix as plddt*100, Chai already on 0-100), so this is the one
     measure of pose confidence that can be read the same way for all of them.
     """
-    bs = [a.b_iso for res in ligChain for a in res]
-    if not bs:
+    return meanBFactor([a for res in ligChain for a in res])
+
+
+def complexPLDDT(model):
+    """Mean pLDDT over every atom of the model, 0-1. For backends that do not report a
+    complex-wide pLDDT of their own."""
+    return meanBFactor([a for ch in model for res in ch for a in res])
+
+
+def meanBFactor(atoms):
+    """Mean B-factor of `atoms` read as a 0-1 pLDDT, or None when the backend wrote none.
+    """
+    bs = [a.b_iso for a in atoms]
+    if not bs or not any(bs):
         return None
     mean = float(np.mean(bs))
     return mean / 100 if mean > 1.5 else mean
@@ -233,18 +245,33 @@ def intellifoldModels(predDir, ligId, rec):
             'plddt': conf.get('plddt')}
 
 
+def squeezed(value, ndim):
+    """`value` as a nested list of exactly `ndim` dimensions, dropping a leading sample
+    axis if the backend left one in, or None when it is missing or has another shape"""
+    if value is None:
+        return None
+    arr = np.squeeze(np.array(value, dtype=float))
+    return arr.tolist() if arr.ndim == ndim else None
+
+
 def protenixModels(predDir, ligId, rec):
     """Protenix: <ligId>/seed_<s>/predictions/<name>_sample_<rank>.cif + summary json"""
-    protIds = [ch['id'] for ch in rec['chains']]
+    # chain_pair_iptm is a dense, symmetric matrix indexed by chain order, receptor chains
+    # first and the ligand last: not by chain letter
+    nProt = len(rec['chains'])
     for cif in sorted(Path(p) for p in glob.glob(str(predDir / ligId / 'seed_*' /
                                                      'predictions' / '*_sample_*.cif'))):
         name, rank = cif.stem.rsplit('_sample_', 1)
         confFile = cif.parent / f'{name}_summary_confidence_sample_{rank}.json'
         conf = json.load(open(confFile)) if confFile.exists() else {}
+        pairs = squeezed(conf.get('chain_pair_iptm'), 2)
+        chainPlddt = squeezed(conf.get('chain_plddt'), 1)
+        plddt = conf.get('plddt')
         yield cif, {
             'confidence': conf.get('ranking_score'),
-            'ligIpTM': ligandIpTM(conf.get('chain_pair_iptm') or {}, rec['ligandChain'], protIds),
-            'plddt': conf.get('plddt')}
+            'ligIpTM': ligandIpTM(pairs, nProt, range(nProt)) if pairs is not None else None,
+            'ligPLDDT': float(chainPlddt[nProt]) if chainPlddt is not None and len(chainPlddt) > nProt else None,
+            'plddt': plddt / 100 if isinstance(plddt, (int, float)) else None}
 
 
 def chainIds(backend, rec):
@@ -323,7 +350,11 @@ def extract(backend, workDir, predDir, outDir):
             with Chem.SDWriter(str(poseFile)) as w:
                 w.write(mol)
 
-            scores['ligPLDDT'] = ligandPLDDT(ligChain)
+            # Taken from the backend's own summary when found  otherwise from the B-factors
+            if scores.get('ligPLDDT') is None:
+                scores['ligPLDDT'] = ligandPLDDT(ligChain)
+            if scores.get('plddt') is None:
+                scores['plddt'] = complexPLDDT(model)
             model.remove_chain(ligChainId)
             recFile = outDir / f'{ligId}_{poseId}_receptor.pdb'
             st.write_pdb(str(recFile))
