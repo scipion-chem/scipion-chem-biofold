@@ -280,6 +280,7 @@ class ProtProtenix(EMProtocol):
         args.append(f" --nhmmer_n_cpu {self.numberOfThreads.get()}")
 
         program_prefix = (
+            "export SSL_CERT_FILE=$CONDA_PREFIX/ssl/cacert.pem && "
             "export CUDA_HOME=$CONDA_PREFIX && "
             "export CPATH=$CONDA_PREFIX/targets/x86_64-linux/include:$CPATH && "
             "export LD_LIBRARY_PATH=$CONDA_PREFIX/targets/x86_64-linux/lib:$LD_LIBRARY_PATH && "
