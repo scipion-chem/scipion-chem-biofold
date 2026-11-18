@@ -10,3 +10,6 @@ from .protocol_chai import ProtChai
 from .protocol_intellifold import ProtIntelliFold
 from .protocol_protenix import ProtProtenix
 from .protocol_boltz_cofolding import ProtBoltzCofolding
+from .protocol_intellifold_cofolding import ProtIntelliFoldCofolding
+from .protocol_protenix_cofolding import ProtProtenixCofolding
+from .protocol_chai_cofolding import ProtChaiCofolding

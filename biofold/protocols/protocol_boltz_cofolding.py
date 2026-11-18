@@ -25,149 +25,68 @@
 # **************************************************************************
 import json
 import os
-import re
 
-import pyworkflow.object as pwobj
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol.params import USE_GPU, GPU_LIST
-from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import convertToSdf, getBaseFileName, getChainIds
 
 from biofold.constants import BOLTZ_DIC
-
-FROM_STRUCTURE, FROM_SEQUENCE, FROM_SET = 0, 1, 2
-FROM_MOLS, FROM_LIBRARY = 0, 1
-AMINO_ACIDS = set('ACDEFGHIKLMNPQRSTVWYX')
-
-def safeName(name):
-    """Filesystem-safe version of a molecule name"""
-    return re.sub(r'[^A-Za-z0-9_.-]', '_', name)
+from .protocol_cofolding_base import COFOLD_ATTRS, COFOLD_ATTRS_HELP, ProtCofoldingBase
 
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'scripts')
+class ProtBoltzCofolding(ProtCofoldingBase):
+    # assigned, not a bare literal: a """...""" %% VAR expression is not a docstring
+    __doc__ = """Cofold a receptor with each ligand of a set using Boltz-2, as a docking protocol.
 
-# results.json key -> output attribute
-SCORE_ATTRS = {'affinity': '_boltzAffinity',
-               'bindingProbability': '_boltzIntProbability',
-               'confidence': '_boltzConfidence',
-               'ligandIpTM': '_boltzIpTM',
-               'plddt': '_boltzPLDDT',
-               'iplddt': '_boltzIPLDDT',
-               'receptorRMSD': '_boltzRecRMSD'}
+    Every ligand is predicted in complex with the receptor chains, and Boltz-2's affinity
+    module scores the binding. The receptor MSA is computed only once and shared by all
+    ligand jobs, and all jobs run in a single Boltz call, so the model is loaded once.
 
+    Each predicted complex is superposed onto the input receptor (CA atoms), so all poses
+    share its frame. Every output pose carries its own predicted receptor as proteinFile,
+    and the set keeps the input receptor.
 
-class ProtBoltzCofolding(EMProtocol):
-    """Cofold a receptor with each ligand of a set using Boltz-2, as a docking protocol.
+    Boltz-2 is the only cofolding backend that predicts binding affinity, which is what
+    makes it usable for ranking a library rather than only for posing a known binder.
+    %s
+    Boltz-2 adds two columns of its own:
 
-    Every ligand is predicted in complex with the receptor chains, and Boltz-2's
-    affinity module scores the binding. The receptor MSA is computed only once
-    and shared by all ligand jobs, and all jobs run in a single Boltz call, so
-    the model is loaded once.
+    - *_boltzAffinity*: predicted log10(IC50) in uM, lower binds stronger. The affinity
+      model takes the top-ranked pose, crops the pocket around the ligand, re-samples it
+      and predicts from its best sample, so there is one value per ligand, shared by all
+      of its poses. Boltz's own docs advise using it to compare active molecules with one
+      another, not to tell binders from inactives.
+    - *_boltzIntProbability*: probability that the ligand is a binder. The value to rank
+      by when screening.
 
-    The receptor is given as a structure (AtomStruct) or as protein sequences.
-
-    Each predicted complex is superposed onto the input receptor (CA atoms), so
-    all poses share its frame. Every output pose carries its own predicted
-    receptor as proteinFile, and the set keeps the input receptor. With sequence
-    input there is no input structure: the first prediction is the reference
-    frame and the set's receptor.
-
-    Output columns:
-      - _boltzAffinity: predicted log10(IC50) in uM (lower binds stronger).
-        One value per ligand (copied to all its poses): the affinity model takes
-        the top-ranked pose, crops the pocket around the ligand, re-samples it and
-        predicts the affinity on its best-ipTM sample.
-      - _boltzIntProbability: probability that the ligand is a binder (0-1).
-      - _boltzConfidence: Boltz confidence score used to rank the models.
-      - _boltzIpTM: ligand interface pTM.
-      - _boltzPLDDT / _boltzIPLDDT: mean pLDDT of the complex / of the interface.
-      - _boltzRecRMSD: CA RMSD (A) of the predicted receptor to the input one
-        (to the reference prediction with sequence input). Large values mean
-        Boltz did not reproduce that conformation.
-
-    Affinity is only supported for ligands up to 128 heavy atoms; it was trained
-    on ligands up to 56.
+    Affinity is only supported for ligands up to 128 heavy atoms; it was trained on
+    ligands up to 56.
 
     Reference: Passaro et al., bioRxiv 2025 (Boltz-2)
-    """
+    """ % COFOLD_ATTRS_HELP
     _label = 'boltz-2 cofolding'
 
+    BACKEND, MOL_CLASS = 'boltz', 'Boltz'
+    MSA_ENV = BOLTZ_DIC
+    SCORE_ATTRS = dict(COFOLD_ATTRS,
+                       affinity='_boltzAffinity',
+                       bindingProbability='_boltzIntProbability')
+
     # -------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        form.addHidden(USE_GPU, params.BooleanParam, default=True,
-                       label="Use GPU for execution: ",
-                       help="Boltz is very slow on CPU.")
-        form.addHidden(GPU_LIST, params.StringParam, default='0', label="Choose GPU IDs",
-                       help="Comma-separated GPU devices. Ligand jobs are distributed among them.")
-
-        form.addSection(label='Input')
-        group = form.addGroup('Input specifications')
-        group.addParam('receptorOrigin', params.EnumParam, default=FROM_STRUCTURE,
-                       label='Receptor from: ', choices=['Structure', 'Sequence', 'SetOfSequences'],
-                       display=params.EnumParam.DISPLAY_HLIST,
-                       help='Where the receptor comes from:\n\n'
-                            '- *Structure*: an AtomStruct object. Its protein chains (or the ones '
-                            'selected) are cofolded, and every prediction is superposed onto it.\n'
-                            '- *Sequence*: type or paste the protein sequence in one-letter code; '
-                            'separate the chains of a complex with ":".\n'
-                            '- *SetOfSequences*: pick one or several sequences from a '
-                            'SetOfSequences object; each becomes one chain.\n\n')
-        group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
-                       label='Receptor structure: ', condition=f'receptorOrigin == {FROM_STRUCTURE}',
-                       help='Its protein chains are cofolded with every ligand.')
-        group.addParam('inputSequence', params.TextParam, width=80,
-                       label='Receptor sequence: ', condition=f'receptorOrigin == {FROM_SEQUENCE}',
-                       help='Protein sequence in one-letter code. Separate the chains of a '
-                            'complex with ":" (e.g. MKV...:MKV... for a homodimer); they are '
-                            'named A, B, ... Spaces and line breaks are ignored.')
-        group.addParam('inputSetOfSequences', params.PointerParam, pointerClass='SetOfSequences',
-                       allowsNull=True, label='Receptor sequences: ',
-                       condition=f'receptorOrigin == {FROM_SET}')
-        group.addParam('chooseSeqs', params.StringParam, default='All',
-                       label='Sequences to use: ', condition=f'receptorOrigin == {FROM_SET}',
-                       help='Sequences of the set that form the receptor, one chain each (named '
-                            'A, B, ... in set order). Use the wizard, or "All".')
-        group.addParam('chains', params.StringParam, default='',
-                       label='Receptor chains: ', condition=f'receptorOrigin == {FROM_STRUCTURE}',
-                       help='Chains to include: use the wizard or type comma-separated ids '
-                            '(e.g. A,B). Empty uses every protein chain.')
-        group.addParam('ligandOrigin', params.EnumParam, default=FROM_MOLS,
-                       label='Ligands from: ', choices=['SetOfSmallMolecules', 'SmallMoleculesLibrary'],
-                       display=params.EnumParam.DISPLAY_HLIST,
-                       help='- *SetOfSmallMolecules*: molecule files (converted to SMILES).\n'
-                            '- *SmallMoleculesLibrary*: a SMILES table; the SMILES are used directly, '
-                            'with no file conversion.')
-        group.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                       label='Ligand set: ', condition=f'ligandOrigin == {FROM_MOLS}', allowsNull=True)
-        group.addParam('inputLibrary', params.PointerParam, pointerClass='SmallMoleculesLibrary',
-                       label='Ligand library: ', condition=f'ligandOrigin == {FROM_LIBRARY}', allowsNull=True)
-        group.addParam('smilesHeader', params.StringParam, default='SMI',
-                       label='SMILES column: ', condition=f'ligandOrigin == {FROM_LIBRARY}',
-                       help='Library column holding the SMILES. Use the wizard to pick it. Ligands are '
-                            'named from the "NAME" column when the library has one.')
-
-        group = form.addGroup('MSA')
-        group.addParam('useMsaServer', params.BooleanParam, default=True,
-                       label='Compute MSA on server: ',
-                       help='Compute the receptor MSA once with the MMseqs2 server. If disabled, '
-                            'Boltz runs in single-sequence mode (faster, usually less accurate).')
-        group.addParam('msaServerUrl', params.StringParam, default='https://api.colabfold.com',
-                       label='MSA server URL: ', condition='useMsaServer',
-                       expertLevel=params.LEVEL_ADVANCED)
+    def _defineExtraMsaParams(self, group):
         group.addParam('maxMsaSeqs', params.IntParam, default=8192,
                        label='Max MSA sequences: ', expertLevel=params.LEVEL_ADVANCED,
                        help='Lower it (e.g. 512-1024) to reduce GPU memory use.')
 
-        form.addSection(label='Parameters')
+    def _definePredictionParams(self, form):
         form.addParam('diffusionSamples', params.IntParam, default=4,
                       label='Poses per ligand: ',
                       help='Number of diffusion samples (predicted complexes) per ligand.')
         form.addParam('infPot', params.BooleanParam, default=True,
                       label="Inference potentials: ",
-                      help='Use steering potentials to improve the physical plausibility of the poses.')
+                      help='Use steering potentials to improve the physical plausibility of the '
+                           'poses. This runs several steered trajectories per pose, so it is one '
+                           'of the most expensive options: turn it off for screening.')
         form.addParam('recyclingSteps', params.IntParam, default=3, expertLevel=params.LEVEL_ADVANCED,
                       label='Recycling steps: ',
                       help='Times the trunk (pairformer) feeds its output back as input to refine '
@@ -193,54 +112,35 @@ class ProtBoltzCofolding(EMProtocol):
                       help='The affinity is predicted by a separate Boltz-2 affinity model. It '
                            'takes the top-ranked pose, crops it to the pocket around the ligand '
                            '(up to 256 residues/ligand tokens), runs its trunk once and then '
-                           're-samples the cropped complex this many times. The '
-                           'sample with the best ipTM is used to predict the affinity; the samples '
-                           'are not written out. One affinity value per ligand, whatever the number '
-                           'of output poses. More samples cost time linearly (they run one by '
-                           'one).')
+                           're-samples the cropped complex this many times. The sample with the '
+                           'best ipTM is used to predict the affinity; the samples are not written '
+                           'out. One affinity value per ligand, whatever the number of output '
+                           'poses. More samples cost time linearly (they run one by one).')
         form.addParam('samplingStepsAff', params.IntParam, default=200, expertLevel=params.LEVEL_ADVANCED,
                       label='Sampling steps for affinity: ',
                       help='Denoising steps the affinity model uses for each of its own samples '
                            '(see "Diffusion samples for affinity"). Lowering it speeds up the '
                            'affinity stage, at the cost of a rougher pose to predict the affinity '
                            'from.')
-        form.addParallelSection(threads=2, mpi=0)
 
     # --------------------------- STEPS functions ------------------------------
-    def _insertAllSteps(self):
-        self._insertFunctionStep(self.prepareStep)
-        self._insertFunctionStep(self.predictStep, needsGPU=True)
-        self._insertFunctionStep(self.extractStep)
-        self._insertFunctionStep(self.createOutputStep)
-
-    def prepareStep(self):
-        """Ligands to SDF, then receptor MSA (once) + one Boltz YAML per ligand"""
-        if self.isFromLibrary():
-            # One .smi per ligand, so each output molecule has its own input file
-            os.makedirs(self._getExtraPath('libraryLigands'), exist_ok=True)
-            ligands = []
-            for ligId, (name, smi) in self.getLibraryLigands().items():
-                with open(self.getLibraryMolFile(ligId), 'w') as f:
-                    f.write(f'{smi}\t{name}\n')
-                ligands.append({'id': ligId, 'smiles': smi})
-        else:
-            ligands = [{'id': ligId, 'file': os.path.abspath(convertToSdf(self, mol.getFileName()))}
-                       for ligId, mol in self.getInputMolsDic().items()]
-        ligandsJson = self._getExtraPath('ligands.json')
-        with open(ligandsJson, 'w') as f:
-            json.dump(ligands, f)
-
-        chains = self.getChainsArg()
-        msaServer = self.msaServerUrl.get() if self.useMsaServer.get() else 'none'
-        receptor = self.getSequence() if self.isFromSequence() else self.getOriginalReceptorFile(getLink=False)
-        args = f'prepare "{receptor}" "{os.path.abspath(ligandsJson)}" ' \
-               f'"{self.getWorkDir()}" {chains} {msaServer}'
-        Plugin.runScript(self, 'boltzCofold.py', args, env=BOLTZ_DIC, scriptDir=SCRIPTS_DIR)
+    def writeJob(self, ligId, smiles, rec, msa):
+        """One Boltz job per ligand, with the affinity of that ligand requested"""
+        proteins = [{'protein': {'id': ids if len(ids) > 1 else ids[0], 'sequence': seq,
+                                 'msa': msa.get(seq, {}).get('msa', 'empty')}}
+                    for seq, ids in self.getChainsBySequence(rec).items()]
+        job = {'version': 1,
+               'sequences': proteins + [{'ligand': {'id': rec['ligandChain'], 'smiles': smiles}}],
+               'properties': [{'affinity': {'binder': rec['ligandChain']}}]}
+        # Boltz reads the file with a YAML parser, and JSON is valid YAML: writing it this
+        # way needs no yaml module, which scipion3 does not ship.
+        with open(os.path.join(self.getInputsDir(), f'{ligId}.yaml'), 'w') as f:
+            json.dump(job, f, indent=2)
 
     def predictStep(self):
         """All ligand jobs in one Boltz call. Finished jobs are skipped on continue."""
         gpus = self.getGpuIds()
-        args = [f'"{os.path.join(self.getWorkDir(), "inputs")}"',
+        args = [f'"{self.getInputsDir()}"',
                 f'--out_dir "{self.getWorkDir()}"',
                 f'--cache "{os.path.abspath(os.path.join(Plugin.getVar(BOLTZ_DIC["home"]), "mol"))}"',
                 f'--recycling_steps {self.recyclingSteps.get()}',
@@ -264,174 +164,14 @@ class ProtBoltzCofolding(EMProtocol):
         # so a continued run still finds (and skips) the predictions already done
         os.replace(os.path.join(self.getWorkDir(), 'boltz_results_inputs'), self.getResultsDir())
 
-    def extractStep(self):
-        """Superpose each prediction onto the receptor; write poses, receptors and scores"""
-        predDir = os.path.join(self.getResultsDir(), 'predictions')
-        args = f'extract "{self.getWorkDir()}" "{predDir}" "{self.getOutputDir()}"'
-        Plugin.runScript(self, 'boltzCofold.py', args, env=BOLTZ_DIC, scriptDir=SCRIPTS_DIR)
-
-    def createOutputStep(self):
-        with open(os.path.join(self.getOutputDir(), 'results.json')) as f:
-            results = json.load(f)
-        if not results:
-            raise Exception('Boltz produced no prediction. Check the run log '
-                            '(e.g. GPU out of memory, unreadable ligands).')
-
-        inputMols = self.getInputMolsDic()
-        outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for res in results:
-            newMol = SmallMolecule()
-            newMol.copy(inputMols[res['id']], copyId=False)
-            newMol.setPoseFile(os.path.relpath(res['poseFile']))
-            newMol.setProteinFile(os.path.relpath(res['receptorFile']))
-            newMol.setPoseId(res['poseId'])
-            newMol.setGridId(1)
-            newMol.setMolClass('Boltz')
-            newMol.setDockId(self.getObjId())
-            # Every attribute on every item: a Set fixes its columns from the first one
-            for key, attr in SCORE_ATTRS.items():
-                setattr(newMol, attr, pwobj.Float(res[key]))
-            outputSet.append(newMol)
-
-        outputSet.updateMolClass()
-        outputSet.setProteinFile(self.getOriginalReceptorFile())
-        outputSet.setDocked(True)
-        self._defineOutputs(outputSmallMolecules=outputSet)
-        self._defineSourceRelation(self.inputLibrary if self.isFromLibrary() else self.inputSmallMolecules,
-                                   outputSet)
-
     # --------------------------- UTILS functions -----------------------------------
-    def getWorkDir(self):
-        return os.path.abspath(self._getExtraPath('boltz'))
-
     def getResultsDir(self):
         return os.path.join(self.getWorkDir(), 'boltz_results')
 
-    def getOutputDir(self):
-        return os.path.abspath(self._getPath('outputLigands'))
-
-    def getInputMolsDic(self):
-        """Boltz job id -> input molecule. The id is also the YAML/record name, so it
-        must be filesystem-safe and unique (molName alone may repeat across conformers)."""
-        if self.isFromLibrary():
-            return {ligId: SmallMolecule(smallMolFilename=self.getLibraryMolFile(ligId), molName=name)
-                    for ligId, (name, _) in self.getLibraryLigands().items()}
-        return {f"{safeName(mol.getMolName())}_{mol.getObjId()}": mol.clone()
-                for mol in self.inputSmallMolecules.get()}
-
-    def isFromLibrary(self):
-        return self.ligandOrigin.get() == FROM_LIBRARY
-
-    def getLibrary(self):
-        """Used by the SMILES column wizard"""
-        return self.inputLibrary.get()
-
-    def getLibraryLigands(self):
-        """Boltz job id -> (name, SMILES) for every library row with a SMILES.
-        The library file has no header line; its columns follow getHeaders()."""
-        library = self.getLibrary()
-        headers = library.getHeaders()
-        smiIdx = headers.index(self.smilesHeader.get())
-        nameIdx = headers.index('NAME') if 'NAME' in headers else None
-        ligands = {}
-        with open(library.getFileName()) as f:
-            for i, line in enumerate(f, 1):
-                row = line.rstrip('\n').split(library.getSeparator())
-                smi = row[smiIdx].strip() if len(row) > smiIdx else ''
-                if not smi:
-                    continue
-                name = row[nameIdx].strip() if nameIdx is not None and len(row) > nameIdx else ''
-                name = name or f'mol{i}'
-                ligands[f'{safeName(name)}_{i}'] = (name, smi)
-        return ligands
-
-    def getLibraryMolFile(self, ligId):
-        return os.path.abspath(self._getExtraPath('libraryLigands', f'{ligId}.smi'))
-
-    def getGpuIds(self):
-        if not getattr(self, USE_GPU).get():
-            return []
-        return [g.strip() for g in getattr(self, GPU_LIST).get().split(',') if g.strip()]
-
-    def getChainsArg(self):
-        """Chain ids for the script: 'all', or 'A,B' from typed ids or the wizard's JSON"""
-        value = (self.chains.get() or '').strip()
-        if not value:
-            return 'all'
-        try:
-            chainIds = getChainIds(value)
-        except ValueError:  # typed ids, not wizard JSON
-            chainIds = value.split(',')
-        return ','.join(c.strip() for c in chainIds)
-
-    def isFromSequence(self):
-        """Receptor given as sequences (typed or from a set), so no input structure"""
-        return self.receptorOrigin.get() != FROM_STRUCTURE
-
-    def getSequence(self):
-        """Receptor chains as SEQ1:SEQ2:..."""
-        if self.receptorOrigin.get() == FROM_SET:
-            chosen = {n.strip() for n in (self.chooseSeqs.get() or '').split(',')}
-            seqs = [seq.getSequence() for seq in self.inputSetOfSequences.get()
-                    if 'All' in chosen or seq.getSeqName() in chosen]
-            return ':'.join(seqs).upper()
-        return re.sub(r'\s', '', self.inputSequence.get() or '').upper()
-
-    def getOriginalReceptorFile(self, getLink=True):
-        """The input receptor, by default the hard link kept inside the protocol (used by viewers).
-        With sequence input, the reference predicted receptor (exists after the extract step)."""
-        if self.isFromSequence():
-            return os.path.relpath(os.path.join(self.getOutputDir(), 'reference_receptor.pdb'))
-        recFile = self.inputAtomStruct.get().getFileName()
-        if not getLink:
-            return os.path.abspath(recFile)
-        recDir = self._getExtraPath('originalReceptor')
-        os.makedirs(recDir, exist_ok=True)
-        recLink = os.path.join(recDir, getBaseFileName(recFile))
-        if not os.path.exists(recLink):
-            os.link(recFile, recLink)
-        return recLink
+    def getPredictionsDir(self):
+        return os.path.join(self.getResultsDir(), 'predictions')
 
     # --------------------------- INFO functions -----------------------------------
-    def _summary(self):
-        summary = []
-        if self.isFromSequence():
-            chains = self.getSequence().split(':')
-            summary.append(f'Receptor: {len(chains)} sequence(s), {sum(map(len, chains))} residues')
-        elif self.inputAtomStruct.get():
-            summary.append(f'Receptor: {os.path.basename(self.inputAtomStruct.get().getFileName())}')
-        if self.isFromLibrary() and self.inputLibrary.get():
-            summary.append(f'Ligands: library of {self.inputLibrary.get().getLength()} molecule(s)')
-        elif not self.isFromLibrary() and self.inputSmallMolecules.get():
-            summary.append(f'Ligands: {self.inputSmallMolecules.get().getSize()} molecule(s)')
-        if self.hasAttribute('outputSmallMolecules'):
-            summary.append(f'Output poses: {self.outputSmallMolecules.getSize()}')
-        return summary
-
-    def _validate(self):
-        errors = []
-        if self.receptorOrigin.get() == FROM_SET and not self.inputSetOfSequences.get():
-            errors.append('A receptor SetOfSequences is required.')
-        elif self.isFromSequence():
-            chains = self.getSequence().split(':')
-            if not all(chains):
-                errors.append('Empty receptor sequence: no sequence selected, or an empty chain between ":".')
-            badChars = set(''.join(chains)) - AMINO_ACIDS
-            if badChars:
-                errors.append(f'Invalid characters in the receptor sequence: {"".join(sorted(badChars))}')
-        elif not self.inputAtomStruct.get():
-            errors.append('A receptor structure is required.')
-
-        if self.isFromLibrary():
-            if not self.inputLibrary.get():
-                errors.append('A ligand library is required.')
-            elif self.smilesHeader.get() not in self.inputLibrary.get().getHeaders():
-                errors.append(f'SMILES column "{self.smilesHeader.get()}" is not in the library headers: '
-                              f'{", ".join(self.inputLibrary.get().getHeaders())}')
-        elif not self.inputSmallMolecules.get():
-            errors.append('A ligand set is required.')
-        return errors
-
     def _methods(self):
         return ['Protein-ligand complexes were cofolded and their binding affinity predicted '
                 'with Boltz-2 (Passaro et al. 2025).']

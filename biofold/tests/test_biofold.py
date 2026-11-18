@@ -28,7 +28,9 @@ import unittest
 
 import os
 
-from biofold.protocols import ProtChai, ProtBoltz, ProtIntelliFold, ProtProtenix, ProtBoltzCofolding
+from biofold.protocols import (ProtChai, ProtBoltz, ProtIntelliFold, ProtProtenix,
+                               ProtBoltzCofolding, ProtIntelliFoldCofolding,
+                               ProtProtenixCofolding, ProtChaiCofolding)
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 from pwchem.protocols import ProtChemImportSmallMolecules
@@ -147,35 +149,89 @@ class TestProtenix(BaseTest):
         self._runProtenix()
 
 
-class TestBoltzCofolding(BaseTest):
+class TestCofoldingBase(BaseTest):
+    """Shared setup and checks for the cofolding protocols.
+
+    Every backend consumes the same receptor and ligands and must produce a docked
+    SetOfSmallMolecules.
+    """
+    #: set by each subclass
+    protClass, protKwargs, extraAttrs = None, {}, ()
+
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet('model_building_tutorial')
         cls.dsLig = DataSet.getDataSet('smallMolecules')
         setupTestProject(cls)
 
-    def test(self):
+    def _runInputs(self):
         protPdb = self.newProtocol(ProtImportPdb, inputPdbData=1,
                                    pdbFile=self.ds.getFile('PDBx_mmCIF/1ake_start.pdb'))
         self.launchProtocol(protPdb)
         protMols = self.newProtocol(ProtChemImportSmallMolecules,
                                     filesPath=self.dsLig.getFile('sdf'), filesPattern='200[01].sdf')
         self.launchProtocol(protMols)
+        return protPdb, protMols
 
-        # Low settings (and a capped MSA) so it fits small GPUs
-        protCofold = self.newProtocol(ProtBoltzCofolding,
-                                      inputAtomStruct=protPdb.outputPdb,
-                                      inputSmallMolecules=protMols.outputSmallMolecules,
-                                      diffusionSamples=2, recyclingSteps=1, samplingSteps=50,
-                                      maxParallelSamples=1, maxMsaSeqs=512, diffusionSamplesAff=2)
-        self.launchProtocol(protCofold)
+    def _checkCofolding(self):
+        """Run the backend on 2 ligands and check the docked output it must produce"""
+        protPdb, protMols = self._runInputs()
+        prot = self.newProtocol(self.protClass,
+                                inputAtomStruct=protPdb.outputPdb,
+                                inputSmallMolecules=protMols.outputSmallMolecules,
+                                **self.protKwargs)
+        self.launchProtocol(prot)
 
-        out = getattr(protCofold, 'outputSmallMolecules', None)
-        self.assertIsNotNone(out)
+        out = getattr(prot, 'outputSmallMolecules', None)
+        self.assertIsNotNone(out, 'no outputSmallMolecules was produced')
         self.assertTrue(out.isDocked())
+        # 2 ligands x 2 poses each
         self.assertEqual(out.getSize(), 4)
+        self.assertTrue(os.path.exists(out.getProteinFile()))
+
         for mol in out:
             self.assertTrue(os.path.exists(mol.getPoseFile()))
+            # each pose carries its own predicted receptor, for the viewer and for MD prep
             self.assertTrue(os.path.exists(mol.getProteinFile()))
-            self.assertIsNotNone(mol._boltzAffinity.get())
-            self.assertIsNotNone(mol._boltzIntProbability.get())
+            for attr in ('_cofoldLigPLDDT', '_cofoldLigIpTM', '_cofoldConfidence',
+                         '_cofoldRecRMSD') + self.extraAttrs:
+                self.assertIsNotNone(getattr(mol, attr, None), f'{attr} missing')
+            # the ligand pLDDT must be the ligand's own, not the complex-wide one
+            self.assertTrue(0 <= mol._cofoldLigPLDDT.get() <= 1)
+
+
+class TestBoltzCofolding(TestCofoldingBase):
+    protClass = ProtBoltzCofolding
+    # low settings, and a capped MSA, so it fits small GPUs
+    protKwargs = dict(diffusionSamples=2, recyclingSteps=1, samplingSteps=50,
+                      maxParallelSamples=1, maxMsaSeqs=512, diffusionSamplesAff=2,
+                      samplingStepsAff=50, infPot=False)
+    # Boltz-2 is the only backend that predicts affinity
+    extraAttrs = ('_boltzAffinity', '_boltzIntProbability')
+
+    def test(self):
+        self._checkCofolding()
+
+
+class TestIntelliFoldCofolding(TestCofoldingBase):
+    protClass = ProtIntelliFoldCofolding
+    protKwargs = dict(diffusionSamples=2, recyclingSteps=1, samplingSteps=50)
+
+    def test(self):
+        self._checkCofolding()
+
+
+class TestProtenixCofolding(TestCofoldingBase):
+    protClass = ProtProtenixCofolding
+    protKwargs = dict(diffusionSamples=2, recyclingSteps=1, samplingSteps=50)
+
+    def test(self):
+        self._checkCofolding()
+
+
+class TestChaiCofolding(TestCofoldingBase):
+    protClass = ProtChaiCofolding
+    protKwargs = dict(diffusionSamples=2, trunkRecycles=1, samplingSteps=50)
+
+    def test(self):
+        self._checkCofolding()
