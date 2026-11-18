@@ -32,9 +32,9 @@ from pwchem import Plugin
 
 from biofold.constants import PROTENIX_DIC
 from .protocol_cofolding_base import COFOLD_ATTRS_HELP, ProtCofoldingBase
+from .protocol_protenix import ProtProtenix
 
-MODELS = ['protenix_base_default_v1.0.0', 'protenix_base_20250630_v1.0.0',
-          'protenix_mini_default_v0.5.0', 'protenix_tiny_default_v0.5.0']
+MODELS = ProtProtenix.models
 
 
 class ProtProtenixCofolding(ProtCofoldingBase):
@@ -68,8 +68,16 @@ class ProtProtenixCofolding(ProtCofoldingBase):
                       help='Number of diffusion samples (predicted complexes) per ligand.')
         form.addParam('model', params.EnumParam, default=0, choices=MODELS,
                       label='Model: ',
-                      help='Protenix weights to use. The mini and tiny variants are faster '
-                           'and lighter on GPU memory, at some cost in accuracy.')
+                      help='Protenix weights to use:\n\n'
+                           '- *protenix-v2*: the newest model (464M parameters), and the default.\n'
+                           '- *protenix_base_default_v1.0.0*: trained with a data cutoff aligned '
+                           'with AlphaFold3 (2021-09-30). Recommended for fair benchmarking and '
+                           'comparison with other methods.\n'
+                           '- *protenix_base_20250630_v1.0.0*: trained with a more recent data '
+                           'cutoff (2025-06-30).\n'
+                           '- *protenix_base_default_v0.5.0*: previous version, kept for '
+                           'backward compatibility.\n\n'
+                           'The weights of a model are downloaded the first time it is used.')
         form.addParam('recyclingSteps', params.IntParam, default=10, expertLevel=params.LEVEL_ADVANCED,
                       label='Recycling steps: ',
                       help='Times the trunk feeds its output back as input to refine the pair '
