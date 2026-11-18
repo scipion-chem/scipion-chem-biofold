@@ -70,7 +70,8 @@ def readReceptor(recFile, chains):
 
 def freeChainId(usedIds):
     """First uppercase letter not taken by a receptor chain, for the ligand"""
-    return next(c for c in string.ascii_uppercase if c not in set(usedIds))
+    used = set(usedIds)
+    return next(c for c in string.ascii_uppercase if c not in used)
 
 
 # --------------------------------------------------------------------------- ligands
