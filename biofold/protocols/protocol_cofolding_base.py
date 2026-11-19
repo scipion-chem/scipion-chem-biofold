@@ -310,7 +310,7 @@ class ProtCofoldingBase(EMProtocol):
         prediction directory, so it must be filesystem-safe and unique (molName alone may
         repeat across conformers)."""
         if self.isFromLibrary():
-            return {ligId: SmallMolecule(smallMolFilename=self.getLibraryMolFile(ligId), molName=name)
+            return {ligId: SmallMolecule(smallMolFilename=os.path.relpath(self.getLibraryMolFile(ligId)), molName=name)
                     for ligId, (name, _) in self.getLibraryLigands().items()}
         return {f"{safeName(mol.getMolName())}_{mol.getObjId()}": mol.clone()
                 for mol in self.inputSmallMolecules.get()}
