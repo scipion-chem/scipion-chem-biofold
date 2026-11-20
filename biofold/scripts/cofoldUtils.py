@@ -92,7 +92,6 @@ def rebuildLigand(smiles, ligChain):
         raise ValueError(f"Invalid SMILES: {smiles}")
     tmpl = Chem.RemoveHs(tmpl)
 
-    # Build RWMol directly instead of formatting a PDB block
     rw = Chem.RWMol()
     conf = Chem.Conformer()
 
@@ -100,12 +99,11 @@ def rebuildLigand(smiles, ligChain):
     for res in ligChain:
         for atom in res:
             el = atom.element.name
-            if el == 'H':  # Skip hydrogens to match RemoveHs(tmpl)
+            if el == 'H':
                 continue
             if el == 'D':
                 el = 'H'
-            rd_atom = Chem.Atom(el)
-            rw.AddAtom(rd_atom)
+            rw.AddAtom(Chem.Atom(el))
             conf.SetAtomPosition(idx, Point3D(atom.pos.x, atom.pos.y, atom.pos.z))
             idx += 1
 
@@ -116,16 +114,41 @@ def rebuildLigand(smiles, ligChain):
     rdDetermineBonds.DetermineConnectivity(raw)
     raw.UpdatePropertyCache(strict=False)
 
-    # 2. Match template to raw
+    # 2. Fix steric clashes: if raw has MORE bonds than tmpl, prune the longest bonds
+    #    (clashing non-bonded atoms are usually 1.6-1.85 A, longer than real covalent bonds)
+    if raw.GetNumBonds() > tmpl.GetNumBonds():
+        coords = raw.GetConformer().GetPositions()
+        bonds_by_len = []
+        for b in raw.GetBonds():
+            u, v = b.GetBeginAtomIdx(), b.GetEndAtomIdx()
+            dist = float(np.linalg.norm(coords[u] - coords[v]))
+            bonds_by_len.append((dist, u, v))
+
+        # Sort longest first
+        bonds_by_len.sort(reverse=True)
+
+        rw_prune = Chem.RWMol(raw)
+        for dist, u, v in bonds_by_len:
+            if rw_prune.GetNumBonds() <= tmpl.GetNumBonds():
+                break
+            rw_prune.RemoveBond(u, v)
+            # Only keep the removal if it doesn't split the molecule into disconnected pieces
+            if len(Chem.GetMolFrags(rw_prune)) > len(Chem.GetMolFrags(raw)):
+                rw_prune.AddBond(u, v, Chem.BondType.SINGLE)
+
+        raw = rw_prune.GetMol()
+        raw.UpdatePropertyCache(strict=False)
+
+    # 3. Match template to raw
     try:
         mol = AllChem.AssignBondOrdersFromTemplate(tmpl, raw)
     except ValueError as e:
-        # Diagnostic check: compare atom counts and fragment counts
-        frags = Chem.GetMolFrags(raw)
+        from collections import Counter
+        tmpl_els = Counter(a.GetSymbol() for a in tmpl.GetAtoms())
+        raw_els = Counter(a.GetSymbol() for a in raw.GetAtoms())
         raise ValueError(
-            f"{e} | Template heavy atoms: {tmpl.GetNumAtoms()}, "
-            f"CIF heavy atoms: {raw.GetNumAtoms()}, "
-            f"Perceived fragments: {len(frags)}"
+            f"{e} | Bonds (tmpl/raw): {tmpl.GetNumBonds()}/{raw.GetNumBonds()} | "
+            f"Elements diff: {dict(tmpl_els - raw_els)} vs {dict(raw_els - tmpl_els)}"
         ) from e
 
     Chem.AssignStereochemistryFrom3D(mol)
