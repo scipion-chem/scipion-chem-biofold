@@ -86,34 +86,49 @@ def ligandSmiles(lig):
 
 
 def rebuildLigand(smiles, ligChain):
-    """The predicted ligand as an RDKit mol with correct bond orders.
-
-    Matched to the SMILES template by molecular graph, not by atom name: every backend
-    names ligand atoms differently (canonical rank, per-element counter, element+index),
-    and those names are an implementation detail we must not depend on. Connectivity is
-    perceived from the predicted coordinates and the bond orders come from the template.
-    """
     tmpl = Chem.MolFromSmiles(smiles)
-    pdbBlock = ''
-    for i, atom in enumerate((a for res in ligChain for a in res), start=1):
-        element = atom.element.name
-        pdbBlock += ('HETATM%5d %-4s LIG A   1    %8.3f%8.3f%8.3f  1.00  0.00          %2s\n'
-                     % (i, atom.name[:4], atom.pos.x, atom.pos.y, atom.pos.z, element.upper()))
+    if tmpl is None:
+        raise ValueError(f"Invalid SMILES: {smiles}")
+    tmpl = Chem.RemoveHs(tmpl)
 
-    raw = Chem.MolFromPDBBlock(pdbBlock, sanitize=False, removeHs=True, proximityBonding=False)
-    if raw is None:
-        raise ValueError('could not read the predicted ligand atoms')
+    # Build RWMol directly instead of formatting a PDB block
+    rw = Chem.RWMol()
+    conf = Chem.Conformer()
+
+    idx = 0
+    for res in ligChain:
+        for atom in res:
+            el = atom.element.name
+            if el == 'H':  # Skip hydrogens to match RemoveHs(tmpl)
+                continue
+            if el == 'D':
+                el = 'H'
+            rd_atom = Chem.Atom(el)
+            rw.AddAtom(rd_atom)
+            conf.SetAtomPosition(idx, Point3D(atom.pos.x, atom.pos.y, atom.pos.z))
+            idx += 1
+
+    raw = rw.GetMol()
+    raw.AddConformer(conf, assignId=True)
+
+    # 1. Perceive connectivity from 3D coordinates
     rdDetermineBonds.DetermineConnectivity(raw)
-    # the PDB reader marks every atom "no implicit Hs"; clear it or the valences stay fixed
-    for a in raw.GetAtoms():
-        a.SetNoImplicit(False)
-        a.SetNumExplicitHs(0)
     raw.UpdatePropertyCache(strict=False)
 
-    mol = AllChem.AssignBondOrdersFromTemplate(tmpl, raw)
+    # 2. Match template to raw
+    try:
+        mol = AllChem.AssignBondOrdersFromTemplate(tmpl, raw)
+    except ValueError as e:
+        # Diagnostic check: compare atom counts and fragment counts
+        frags = Chem.GetMolFrags(raw)
+        raise ValueError(
+            f"{e} | Template heavy atoms: {tmpl.GetNumAtoms()}, "
+            f"CIF heavy atoms: {raw.GetNumAtoms()}, "
+            f"Perceived fragments: {len(frags)}"
+        ) from e
+
     Chem.AssignStereochemistryFrom3D(mol)
     return mol
-
 
 # --------------------------------------------------------------------------- geometry
 def kabsch(P, Q):
