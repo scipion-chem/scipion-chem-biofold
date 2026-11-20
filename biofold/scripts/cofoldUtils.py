@@ -29,6 +29,7 @@ import gemmi
 import numpy as np
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, rdDetermineBonds
+from rdkit.Geometry import Point3D
 
 RDLogger.DisableLog('rdApp.*')
 
