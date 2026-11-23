@@ -49,6 +49,8 @@ class Plugin(pwchemPlugin):
         cls._defineEmVar(CHAI_DIC['home'], cls.getEnvName(CHAI_DIC))
         cls._defineEmVar(INTELLIFOLD_DIC['home'], cls.getEnvName(INTELLIFOLD_DIC))
         cls._defineEmVar(PROTENIX_DIC['home'], cls.getEnvName(PROTENIX_DIC))
+        # OpenBind has no installer here: only the location of an existing install
+        cls._defineEmVar(OPENBIND_DIC['home'], cls.getEnvName(OPENBIND_DIC))
 
     @classmethod
     def addBoltzPackage(cls, env, default=True):

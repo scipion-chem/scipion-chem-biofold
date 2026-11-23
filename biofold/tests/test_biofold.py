@@ -30,7 +30,8 @@ import os
 
 from biofold.protocols import (ProtChai, ProtBoltz, ProtIntelliFold, ProtProtenix,
                                ProtBoltzCofolding, ProtIntelliFoldCofolding,
-                               ProtProtenixCofolding, ProtChaiCofolding)
+                               ProtProtenixCofolding, ProtChaiCofolding,
+                               ProtOpenBindCofolding)
 from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 from pwchem.protocols import ProtChemImportSmallMolecules
@@ -232,6 +233,14 @@ class TestProtenixCofolding(TestCofoldingBase):
 class TestChaiCofolding(TestCofoldingBase):
     protClass = ProtChaiCofolding
     protKwargs = dict(diffusionSamples=2, trunkRecycles=1, samplingSteps=50)
+
+    def test(self):
+        self._checkCofolding()
+
+
+class TestOpenBindCofolding(TestCofoldingBase):
+    protClass = ProtOpenBindCofolding
+    protKwargs = dict(diffusionSamples=2)
 
     def test(self):
         self._checkCofolding()

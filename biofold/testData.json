@@ -12,7 +12,8 @@
             "test_biofold.TestBoltzCofolding",
             "test_biofold.TestIntelliFoldCofolding",
             "test_biofold.TestProtenixCofolding",
-            "test_biofold.TestChaiCofolding"
+            "test_biofold.TestChaiCofolding",
+            "test_biofold.TestOpenBindCofolding"
         ],
         "dependencies": [],
         "others": []

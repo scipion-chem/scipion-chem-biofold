@@ -13,3 +13,4 @@ from .protocol_boltz_cofolding import ProtBoltzCofolding
 from .protocol_intellifold_cofolding import ProtIntelliFoldCofolding
 from .protocol_protenix_cofolding import ProtProtenixCofolding
 from .protocol_chai_cofolding import ProtChaiCofolding
+from .protocol_openbind_cofolding import ProtOpenBindCofolding

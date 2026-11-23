@@ -346,8 +346,31 @@ def chaiModels(predDir, ligId, rec):
             'plddt': None}
 
 
-BACKENDS = {'boltz': boltzModels, 'chai': chaiModels,
-            'protenix': protenixModels, 'intellifold': intellifoldModels}
+def openbindModels(predDir, ligId, rec):
+    """OpenBind (OpenFold3): <ligId>/seed_<s>/<ligId>_seed_<s>_sample_<k>_model.cif, with
+    an aggregated confidence json beside each one"""
+    def order(path):
+        fields = path.stem.split('_')
+        return int(fields[-4]), int(fields[-2])
+
+    for st in sorted((Path(p) for p in glob.glob(str(predDir / ligId / 'seed_*' / '*_model.cif'))),
+                     key=order):
+        confFile = Path(str(st)[:-len('_model.cif')] + '_confidences_aggregated.json')
+        conf = json.load(open(confFile)) if confFile.exists() else {}
+        # its chain_pair_iptm is flat, keyed by a chain-id pair written '(A, B)'
+        pairs = {}
+        for key, value in (conf.get('chain_pair_iptm') or {}).items():
+            first, second = [c.strip() for c in key.strip('()').split(',')]
+            pairs.setdefault(first, {})[second] = value
+        yield st, {
+            'confidence': conf.get('sample_ranking_score'),
+            'ligIpTM': ligandIpTM(pairs, rec['ligandChain'], [ch['id'] for ch in rec['chains']]),
+            # already 0-1: OpenFold3's pLDDT head has its bins running from 0 to 1
+            'plddt': conf.get('avg_plddt')}
+
+
+BACKENDS = {'boltz': boltzModels, 'chai': chaiModels, 'protenix': protenixModels,
+            'intellifold': intellifoldModels, 'openbind': openbindModels}
 
 
 # --------------------------------------------------------------------- extraction
