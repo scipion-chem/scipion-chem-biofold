@@ -161,9 +161,12 @@ class ProtOpenBindCofolding(ProtCofoldingBase):
     def getCacheExport(self):
         """Tie the run to this install: OpenFold3 reads its cache for the default
         checkpoint and for a runner.yml of its own, which ours then overrides. Without it
-        the cache is the user's ~/.openfold3, whose settings would leak into the run."""
+        the cache is the user's ~/.openfold3, whose settings would leak into the run.
+
+        Through env, not export: runCondaCommand puts CUDA_VISIBLE_DEVICES in front of the
+        program, and a variable assignment before "export" never reaches what runs after it."""
         home = Plugin.getVar(OPENBIND_DIC['home'])
-        return f'export OPENFOLD_CACHE="{home}" && ' if home else ''
+        return f'env OPENFOLD_CACHE="{home}" ' if home else ''
 
     def writeRunnerYaml(self, gpus):
         """The settings OpenFold3 takes only from its runner YAML, not from the command line.

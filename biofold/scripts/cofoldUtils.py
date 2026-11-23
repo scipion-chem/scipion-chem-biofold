@@ -369,8 +369,32 @@ def openbindModels(predDir, ligId, rec):
             'plddt': conf.get('avg_plddt')}
 
 
+def alphafold3Models(predDir, ligId, rec):
+    """AlphaFold 3: <ligId>/seed-<s>_sample-<k>/<ligId>_seed-<s>_sample-<k>_model.cif, with a
+    _summary_confidences.json beside each one"""
+    def order(path):
+        # seed-<s>_sample-<k>, numerically: sorted as text, sample-10 would precede sample-2
+        seed, sample = path.parent.name[len('seed-'):].split('_sample-')
+        return int(seed), int(sample)
+
+    for cif in sorted((Path(p) for p in glob.glob(str(predDir / ligId / 'seed-*_sample-*' / '*_model.cif'))),
+                      key=order):
+        confFile = Path(str(cif)[:-len('_model.cif')] + '_summary_confidences.json')
+        conf = json.load(open(confFile)) if confFile.exists() else {}
+        # chain_pair_iptm is a square matrix in the order of the chain_ids it is written with
+        ids, matrix = conf.get('chain_ids') or [], conf.get('chain_pair_iptm')
+        pairs = {a: {b: matrix[i][j] for j, b in enumerate(ids)} for i, a in enumerate(ids)} \
+            if matrix and len(matrix) == len(ids) else {}
+        yield cif, {
+            'confidence': conf.get('ranking_score'),
+            'ligIpTM': ligandIpTM(pairs, rec['ligandChain'], [ch['id'] for ch in rec['chains']]),
+            # no complex pLDDT in the summary; the extraction reads it from the B-factors (0-100)
+            'plddt': None}
+
+
 BACKENDS = {'boltz': boltzModels, 'chai': chaiModels, 'protenix': protenixModels,
-            'intellifold': intellifoldModels, 'openbind': openbindModels}
+            'intellifold': intellifoldModels, 'openbind': openbindModels,
+            'alphafold3': alphafold3Models}
 
 
 # --------------------------------------------------------------------- extraction

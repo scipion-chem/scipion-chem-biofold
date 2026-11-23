@@ -13,7 +13,8 @@
             "test_biofold.TestIntelliFoldCofolding",
             "test_biofold.TestProtenixCofolding",
             "test_biofold.TestChaiCofolding",
-            "test_biofold.TestOpenBindCofolding"
+            "test_biofold.TestOpenBindCofolding",
+            "test_biofold.TestAlphaFold3Cofolding"
         ],
         "dependencies": [],
         "others": []
