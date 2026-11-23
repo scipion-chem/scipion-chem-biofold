@@ -210,13 +210,17 @@ class ProtCofoldingBase(EMProtocol):
         msa = {}
         if self.MSA_ENV is not None and self.useMsaServer.get():
             args = f'{self.BACKEND} "{self.getWorkDir()}" {self.getMsaArgs()}'
-            Plugin.runScript(self, 'cofoldMsa.py', args, env=self.MSA_ENV, scriptDir=SCRIPTS_DIR)
+            self.runMsaScript(args)
             with open(os.path.join(self.getWorkDir(), 'msa.json')) as f:
                 msa = json.load(f)
 
         os.makedirs(self.getInputsDir(), exist_ok=True)
         for ligId, smi in rec['ligands'].items():
             self.writeJob(ligId, smi, rec, msa)
+
+    def runMsaScript(self, args):
+        """Run cofoldMsa.py in the backend's env. Override when the env is not name-version."""
+        Plugin.runScript(self, 'cofoldMsa.py', args, env=self.MSA_ENV, scriptDir=SCRIPTS_DIR)
 
     def getMsaArgs(self):
         """What follows the backend name and work dir on cofoldMsa.py's command line"""

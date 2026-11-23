@@ -52,7 +52,7 @@ class Plugin(pwchemPlugin):
         # OpenBind has no installer here: only the location of an existing install
         cls._defineEmVar(OPENBIND_DIC['home'], cls.getEnvName(OPENBIND_DIC))
         # Same for AlphaFold 3: point ALPHAFOLD3_HOME at the checkout that holds run_alphafold.py
-        cls._defineEmVar(ALPHAFOLD3_DIC['home'], cls.getEnvName(ALPHAFOLD3_DIC))
+        cls._defineEmVar(ALPHAFOLD3_DIC['home'], ALPHAFOLD3_DIC['name'])
 
     @classmethod
     def addBoltzPackage(cls, env, default=True):

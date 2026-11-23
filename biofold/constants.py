@@ -32,5 +32,7 @@ PROTENIX_DIC = {'name': 'protenix', 'version': '2.0.0', 'home': 'PROTENIX_HOME'}
 # OpenFold3 run with the OpenBind weights; installed outside this plugin
 OPENBIND_DIC = {'name': 'openbind', 'version': '0', 'home': 'OPENBIND_HOME'}
 # AlphaFold 3 run from a source checkout (home holds run_alphafold.py); installed outside this plugin
-ALPHAFOLD3_DIC = {'name': 'alphafold3', 'version': '', 'home': 'ALPHAFOLD3_HOME'}
+# 'env' is the conda environment's exact name: pwchem's helpers would call it name-version, so
+# this entry is never passed to them (the protocol activates the environment itself)
+ALPHAFOLD3_DIC = {'name': 'alphafold3', 'env': 'alphafold3', 'home': 'ALPHAFOLD3_HOME'}
 

@@ -33,7 +33,7 @@ import pyworkflow.protocol.params as params
 from pwchem import Plugin
 
 from biofold.constants import ALPHAFOLD3_DIC
-from .protocol_cofolding_base import COFOLD_ATTRS_HELP, ProtCofoldingBase
+from .protocol_cofolding_base import COFOLD_ATTRS_HELP, SCRIPTS_DIR, ProtCofoldingBase
 
 
 class ProtAlphaFold3Cofolding(ProtCofoldingBase):
@@ -61,7 +61,7 @@ class ProtAlphaFold3Cofolding(ProtCofoldingBase):
 
     This protocol does not install AlphaFold 3. Point ALPHAFOLD3_HOME at a checkout of
     its repository (the folder that holds run_alphafold.py), and keep its conda environment
-    named alphafold3-3.0.6. The model parameters are obtained from Google DeepMind and their
+    named alphafold3. The model parameters are obtained from Google DeepMind and their
     use, like that of the predictions, is subject to its terms of use.
 
     Reference: Abramson et al., Nature 2024 (AlphaFold 3)
@@ -146,20 +146,30 @@ class ProtAlphaFold3Cofolding(ProtCofoldingBase):
                 '--force_output_dir',
                 f'--jax_compilation_cache_dir "{os.path.join(self.getWorkDir(), "jax_cache")}"']
 
-        # Through env, not export: runCondaCommand puts CUDA_VISIBLE_DEVICES in front of the
-        # program, and a variable assignment before "export" never reaches what runs after it
+        # Through env, not export: CUDA_VISIBLE_DEVICES goes in front of the program, and a
+        # variable assignment before "export" never reaches what runs after it
         envVars = ['XLA_FLAGS=--xla_gpu_enable_triton_gemm=false']
         if self.unifiedMemory.get():
             envVars += ['XLA_PYTHON_CLIENT_PREALLOCATE=false', 'TF_FORCE_UNIFIED_MEMORY=true',
                         'XLA_CLIENT_MEM_FRACTION=3.2']
 
         gpus = self.getGpuIds()
-        Plugin.runCondaCommand(self, ' '.join(args), ALPHAFOLD3_DIC,
-                               f'env {" ".join(envVars)} python',
-                               # one process drives one GPU
-                               gpuIdx=gpus[0] if gpus else None)
+        # one process drives one GPU
+        gpuStr = f'CUDA_VISIBLE_DEVICES={gpus[0]}' if gpus else ''
+        self.runJob(f'{self.getEnvActivation()} && {gpuStr} env {" ".join(envVars)} python ',
+                    ' '.join(args), env=Plugin.getEnviron(), numberOfThreads=1)
+
+    def runMsaScript(self, args):
+        """cofoldMsa.py needs only the standard library, but runs in the AlphaFold 3 env"""
+        self.runJob(f'{self.getEnvActivation()} && python {os.path.join(SCRIPTS_DIR, "cofoldMsa.py")}',
+                    args, env=Plugin.getEnviron())
 
     # --------------------------- UTILS functions -----------------------------------
+    def getEnvActivation(self):
+        """Activation line for the environment, by its exact name. pwchem's helpers build it as
+        name-version, which is not how an AlphaFold 3 checkout is usually set up."""
+        return f"{Plugin.getCondaActivationCmd()}conda activate {ALPHAFOLD3_DIC['env']}"
+
     def getAlphaFold3Home(self):
         home = Plugin.getVar(ALPHAFOLD3_DIC['home'])
         return os.path.abspath(home) if home else ''
