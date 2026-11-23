@@ -32,5 +32,5 @@ PROTENIX_DIC = {'name': 'protenix', 'version': '2.0.0', 'home': 'PROTENIX_HOME'}
 # OpenFold3 run with the OpenBind weights; installed outside this plugin
 OPENBIND_DIC = {'name': 'openbind', 'version': '0', 'home': 'OPENBIND_HOME'}
 # AlphaFold 3 run from a source checkout (home holds run_alphafold.py); installed outside this plugin
-ALPHAFOLD3_DIC = {'name': 'alphafold3', 'version': '3.0.6', 'home': 'ALPHAFOLD3_HOME'}
+ALPHAFOLD3_DIC = {'name': 'alphafold3', 'version': '', 'home': 'ALPHAFOLD3_HOME'}
 
