@@ -98,6 +98,10 @@ class ProtBoltzCofolding(ProtCofoldingBase):
                       help='Denoising steps of the diffusion module used to build each pose from '
                            'noise. Fewer steps are faster but give rougher, less accurate '
                            'structures. Boltz default: 200.')
+        form.addParam('seed', params.IntParam, default=42, expertLevel=params.LEVEL_ADVANCED,
+                      label='Seed: ',
+                      help='Random seed, so a run can be reproduced. Boltz takes a single seed and '
+                           'cannot run several in one call.')
         form.addParam('stepScale', params.FloatParam, default=1.638, expertLevel=params.LEVEL_ADVANCED,
                       label='Step scale: ',
                       help='Diffusion temperature: lower values give more diverse samples.')
@@ -148,6 +152,7 @@ class ProtBoltzCofolding(ProtCofoldingBase):
                 f'--diffusion_samples {self.diffusionSamples.get()}',
                 f'--max_parallel_samples {self.maxParallelSamples.get()}',
                 f'--step_scale {self.stepScale.get()}',
+                f'--seed {self.seed.get()}',
                 f'--max_msa_seqs {self.maxMsaSeqs.get()}',
                 f'--diffusion_samples_affinity {self.diffusionSamplesAff.get()}',
                 f'--sampling_steps_affinity {self.samplingStepsAff.get()}',

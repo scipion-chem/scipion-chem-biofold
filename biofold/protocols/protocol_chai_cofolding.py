@@ -80,8 +80,12 @@ class ProtChaiCofolding(ProtCofoldingBase):
                       help='Independent trunk passes per ligand. Above 1, Chai nests its output '
                            'in trunk_<i> subdirectories, which this protocol does not read, so '
                            'leave it at 1.')
-        form.addParam('seed', params.IntParam, default=42, expertLevel=params.LEVEL_ADVANCED,
-                      label='Seed: ', help='Random seed, for reproducible runs.')
+        form.addParam('seeds', params.StringParam, default='42', expertLevel=params.LEVEL_ADVANCED,
+                      label='Seeds: ',
+                      help='Random seed. Several comma-separated seeds predict each ligand that many '
+                           'times, multiplying the number of output poses. Chai-1 takes one seed per '
+                           'call, so every extra seed is a separate run that loads the model again: '
+                           'it costs a full prediction, not just another sample.')
 
     # --------------------------- STEPS functions ------------------------------
     def writeJob(self, ligId, smiles, rec, msa):
@@ -94,19 +98,19 @@ class ProtChaiCofolding(ProtCofoldingBase):
             f.write(f'{records}>ligand|name={ligId}\n{smiles}\n')
 
     def predictStep(self):
-        """One Chai call per ligand: its CLI predicts a single complex at a time.
+        """One Chai call per ligand and seed: its CLI predicts a single complex at a time.
 
-        The MSA is computed by the first ligand that needs it and then reused, so the
-        server is queried once however many ligands there are.
+        The MSA is computed by the first call that needs it and then reused, so the
+        server is queried once however many ligands and seeds there are.
         """
         rec = self.getReceptorInfo()
         gpus = self.getGpuIds()
         msaDir = os.path.join(self.getWorkDir(), 'msa')
 
-        for ligId in rec['ligands']:
-            outDir = os.path.join(self.getPredictionsDir(), ligId)
+        for ligId, seed in ((l, sd) for l in rec['ligands'] for sd in self.getSeeds()):
+            outDir = os.path.join(self.getPredictionsDir(), ligId, f'seed_{seed}')
             # Chai refuses a directory that already exists, which also makes this the
-            # resume check: a ligand already predicted is skipped on a continued run.
+            # resume check: a ligand and seed already predicted are skipped on a continued run.
             if os.path.exists(outDir):
                 continue
 
@@ -115,7 +119,7 @@ class ProtChaiCofolding(ProtCofoldingBase):
                     f'--num-diffn-timesteps {self.samplingSteps.get()}',
                     f'--num-diffn-samples {self.diffusionSamples.get()}',
                     f'--num-trunk-samples {self.trunkSamples.get()}',
-                    f'--seed {self.seed.get()}']
+                    f'--seed {seed}']
             if gpus:
                 args.append('--device cuda:0')
 
@@ -136,9 +140,22 @@ class ProtChaiCofolding(ProtCofoldingBase):
                 shutil.copytree(generated, msaDir)
 
     # --------------------------- UTILS functions -----------------------------------
+    def getSeeds(self):
+        return [int(s) for s in self.seeds.get().split(',') if s.strip()]
+
     def getPredictionsDir(self):
+        """Chai writes <this>/<ligand>/seed_<s>/, one call per ligand and seed"""
         return os.path.join(self.getWorkDir(), 'chai_results')
 
     # --------------------------- INFO functions -----------------------------------
+    def _validate(self):
+        errors = super()._validate()
+        try:
+            if not self.getSeeds():
+                errors.append('At least one seed is required.')
+        except ValueError:
+            errors.append(f'Seeds must be whole numbers separated by commas: {self.seeds.get()}')
+        return errors
+
     def _methods(self):
         return ['Protein-ligand complexes were cofolded with Chai-1.']
