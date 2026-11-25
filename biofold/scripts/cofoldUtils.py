@@ -328,22 +328,25 @@ def chainIds(backend, rec):
 
 
 def chaiModels(predDir, ligId, rec):
-    """Chai-1: <ligId>/pred.model_idx_<i>.cif + scores.model_idx_<i>.npz"""
+    """Chai-1: <ligId>/seed_<s>/pred.model_idx_<i>.cif + scores.model_idx_<i>.npz."""
     ligDir = predDir / ligId
     nProt = len(rec['chains'])
-    for cif in sorted(ligDir.glob('pred.model_idx_*.cif')):
-        idx = cif.stem.split('_idx_')[1]
-        scoreFile = ligDir / f'scores.model_idx_{idx}.npz'
-        scores = dict(np.load(scoreFile)) if scoreFile.exists() else {}
-        # chai indexes its per-chain matrices by chain order, receptor chains first
-        pairs = scores.get('per_chain_pair_iptm')
-        pairDic = {i: {j: v for j, v in enumerate(row)}
-                   for i, row in enumerate(np.atleast_2d(np.squeeze(pairs)))} if pairs is not None else {}
-        yield cif, {
-            'confidence': float(np.squeeze(scores['aggregate_score'])) if 'aggregate_score' in scores else None,
-            'ligIpTM': ligandIpTM(pairDic, nProt, range(nProt)),
-            # chai writes no complex pLDDT; the ligand one is read from the B-factors
-            'plddt': None}
+    runDirs = sorted(ligDir.glob('seed_*'), key=lambda d: int(d.name[len('seed_'):])) or [ligDir]
+    for runDir in runDirs:
+        for cif in sorted(runDir.glob('pred.model_idx_*.cif'),
+                          key=lambda c: int(c.stem.split('_idx_')[1])):
+            idx = cif.stem.split('_idx_')[1]
+            scoreFile = runDir / f'scores.model_idx_{idx}.npz'
+            scores = dict(np.load(scoreFile)) if scoreFile.exists() else {}
+            # chai indexes its per-chain matrices by chain order, receptor chains first
+            pairs = scores.get('per_chain_pair_iptm')
+            pairDic = {i: {j: v for j, v in enumerate(row)}
+                       for i, row in enumerate(np.atleast_2d(np.squeeze(pairs)))} if pairs is not None else {}
+            yield cif, {
+                'confidence': float(np.squeeze(scores['aggregate_score'])) if 'aggregate_score' in scores else None,
+                'ligIpTM': ligandIpTM(pairDic, nProt, range(nProt)),
+                # chai writes no complex pLDDT; the ligand one is read from the B-factors
+                'plddt': None}
 
 
 def openbindModels(predDir, ligId, rec):
