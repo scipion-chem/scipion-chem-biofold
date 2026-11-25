@@ -40,7 +40,7 @@ from pyworkflow.protocol.params import USE_GPU, GPU_LIST
 from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
-from pwchem.constants import RDKIT_DIC
+from pwchem.constants import RDKIT_DIC, SCORCH2_DIC
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import convertToSdf, getBaseFileName, getChainIds
 
@@ -157,6 +157,15 @@ class ProtCofoldingBase(EMProtocol):
                        expertLevel=params.LEVEL_ADVANCED)
         self._defineExtraMsaParams(group)
 
+        group = form.addGroup('Stereochemistry')
+        group.addParam('checkStereo', params.BooleanParam, default=True,
+                       label='Discard wrong stereochemistry: ',
+                       help='Cofolding models place the atoms by diffusion, so a stereocentre can '
+                            'come out mirrored even though the input defines it.\n\n'
+                            'With this on, every pose is checked against its input SMILES with '
+                            "PoseBusters' identity test, and any pose whose tetrahedral "
+                            'stereochemistry disagrees is left out of the output.')
+
         form.addSection(label='Parameters')
         self._definePredictionParams(form)
         form.addParallelSection(threads=2, mpi=0)
@@ -174,6 +183,8 @@ class ProtCofoldingBase(EMProtocol):
         self._insertFunctionStep(self.prepareStep)
         self._insertFunctionStep(self.predictStep, needsGPU=True)
         self._insertFunctionStep(self.extractStep)
+        if self.checkStereo.get():
+            self._insertFunctionStep(self.stereoStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def prepareStep(self):
@@ -263,6 +274,19 @@ class ProtCofoldingBase(EMProtocol):
                 f'"{self.getPredictionsDir()}" "{self.getOutputDir()}"')
         Plugin.runScript(self, 'cofoldUtils.py', args, env=RDKIT_DIC, scriptDir=SCRIPTS_DIR)
 
+    def stereoStep(self):
+        """Runs in pwchem's scorch2 env, the one its PoseBusters package is installed into."""
+        args = f'"{self.getWorkDir()}" "{self.getOutputDir()}"'
+        Plugin.runScript(self, 'cofoldStereo.py', args, env=SCORCH2_DIC, scriptDir=SCRIPTS_DIR)
+
+    def getStereoVerdicts(self):
+        """{pose file: stereoOK}. A pose that could not be checked is kept."""
+        stereoFile = os.path.join(self.getOutputDir(), 'stereo.json')
+        if not self.checkStereo.get() or not os.path.exists(stereoFile):
+            return {}
+        with open(stereoFile) as f:
+            return {pose: v['stereoOK'] for pose, v in json.load(f).items()}
+
     def getPredictionsDir(self):
         """Directory holding one subdirectory of predictions per ligand id."""
         raise NotImplementedError
@@ -273,6 +297,19 @@ class ProtCofoldingBase(EMProtocol):
         if not results:
             raise Exception(f'{self.MOL_CLASS} produced no prediction. Check the run log '
                             f'(e.g. GPU out of memory, unreadable ligands).')
+
+        verdicts = self.getStereoVerdicts()
+        kept = [r for r in results if verdicts.get(r['poseFile'], True) is not False]
+        if not kept:
+            raise Exception(f'Every pose has the wrong stereochemistry, so {self.MOL_CLASS} '
+                            f'produced no output.')
+        dropped = len(results) - len(kept)
+        if dropped:
+            lost = sorted({r['id'] for r in results} - {r['id'] for r in kept})
+            self.info(f'Stereochemistry: {dropped} of {len(results)} poses discarded')
+            if lost:
+                self.info(f'No pose left for: {", ".join(lost)}')
+        results = kept
 
         scoreKeys = [k for k in self.SCORE_ATTRS if any(r.get(k) is not None for r in results)]
 
