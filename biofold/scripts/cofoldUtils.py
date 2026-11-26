@@ -87,70 +87,30 @@ def ligandSmiles(lig):
 
 
 def rebuildLigand(smiles, ligChain):
+    """The input molecule's chemistry placed on the predicted coordinates.
+
+    The prediction holds elements and positions only, so the bonds are perceived from the
+    geometry and their orders then come from the input SMILES.
+    """
     tmpl = Chem.MolFromSmiles(smiles)
     if tmpl is None:
         raise ValueError(f"Invalid SMILES: {smiles}")
     tmpl = Chem.RemoveHs(tmpl)
 
-    rw = Chem.RWMol()
-    conf = Chem.Conformer()
+    rw, conf = Chem.RWMol(), Chem.Conformer()
+    for atom in (a for res in ligChain for a in res):
+        el = atom.element.name
+        if el == 'H':
+            continue
+        conf.SetAtomPosition(rw.AddAtom(Chem.Atom('H' if el == 'D' else el)),
+                             Point3D(atom.pos.x, atom.pos.y, atom.pos.z))
 
-    idx = 0
-    for res in ligChain:
-        for atom in res:
-            el = atom.element.name
-            if el == 'H':
-                continue
-            if el == 'D':
-                el = 'H'
-            rw.AddAtom(Chem.Atom(el))
-            conf.SetAtomPosition(idx, Point3D(atom.pos.x, atom.pos.y, atom.pos.z))
-            idx += 1
+    mol = rw.GetMol()
+    mol.AddConformer(conf, assignId=True)
+    rdDetermineBonds.DetermineConnectivity(mol)
+    mol.UpdatePropertyCache(strict=False)
 
-    raw = rw.GetMol()
-    raw.AddConformer(conf, assignId=True)
-
-    # 1. Perceive connectivity from 3D coordinates
-    rdDetermineBonds.DetermineConnectivity(raw)
-    raw.UpdatePropertyCache(strict=False)
-
-    # 2. Fix steric clashes: if raw has MORE bonds than tmpl, prune the longest bonds
-    #    (clashing non-bonded atoms are usually 1.6-1.85 A, longer than real covalent bonds)
-    if raw.GetNumBonds() > tmpl.GetNumBonds():
-        coords = raw.GetConformer().GetPositions()
-        bonds_by_len = []
-        for b in raw.GetBonds():
-            u, v = b.GetBeginAtomIdx(), b.GetEndAtomIdx()
-            dist = float(np.linalg.norm(coords[u] - coords[v]))
-            bonds_by_len.append((dist, u, v))
-
-        # Sort longest first
-        bonds_by_len.sort(reverse=True)
-
-        rw_prune = Chem.RWMol(raw)
-        for dist, u, v in bonds_by_len:
-            if rw_prune.GetNumBonds() <= tmpl.GetNumBonds():
-                break
-            rw_prune.RemoveBond(u, v)
-            # Only keep the removal if it doesn't split the molecule into disconnected pieces
-            if len(Chem.GetMolFrags(rw_prune)) > len(Chem.GetMolFrags(raw)):
-                rw_prune.AddBond(u, v, Chem.BondType.SINGLE)
-
-        raw = rw_prune.GetMol()
-        raw.UpdatePropertyCache(strict=False)
-
-    # 3. Match template to raw
-    try:
-        mol = AllChem.AssignBondOrdersFromTemplate(tmpl, raw)
-    except ValueError as e:
-        from collections import Counter
-        tmpl_els = Counter(a.GetSymbol() for a in tmpl.GetAtoms())
-        raw_els = Counter(a.GetSymbol() for a in raw.GetAtoms())
-        raise ValueError(
-            f"{e} | Bonds (tmpl/raw): {tmpl.GetNumBonds()}/{raw.GetNumBonds()} | "
-            f"Elements diff: {dict(tmpl_els - raw_els)} vs {dict(raw_els - tmpl_els)}"
-        ) from e
-
+    mol = AllChem.AssignBondOrdersFromTemplate(tmpl, mol)
     Chem.AssignStereochemistryFrom3D(mol)
     return mol
 
