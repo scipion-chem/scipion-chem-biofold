@@ -87,10 +87,10 @@ def ligandSmiles(lig):
 
 
 def rebuildLigand(smiles, ligChain):
-    """The input molecule's chemistry placed on the predicted coordinates.
+    """The input molecule carrying the predicted coordinates.
 
-    The prediction holds elements and positions only, so the bonds are perceived from the
-    geometry and their orders then come from the input SMILES.
+    The molecule perceived from that geometry alone has no hydrogens and unusual valences,
+    so it is used only to map the prediction onto the molecule built from the SMILES.
     """
     tmpl = Chem.MolFromSmiles(smiles)
     if tmpl is None:
@@ -105,12 +105,23 @@ def rebuildLigand(smiles, ligChain):
         conf.SetAtomPosition(rw.AddAtom(Chem.Atom('H' if el == 'D' else el)),
                              Point3D(atom.pos.x, atom.pos.y, atom.pos.z))
 
-    mol = rw.GetMol()
-    mol.AddConformer(conf, assignId=True)
-    rdDetermineBonds.DetermineConnectivity(mol)
-    mol.UpdatePropertyCache(strict=False)
+    pred = rw.GetMol()
+    pred.AddConformer(conf, assignId=True)
+    rdDetermineBonds.DetermineConnectivity(pred)
+    pred.UpdatePropertyCache(strict=False)
+    pred = AllChem.AssignBondOrdersFromTemplate(tmpl, pred)
 
-    mol = AllChem.AssignBondOrdersFromTemplate(tmpl, mol)
+    match = pred.GetSubstructMatch(tmpl)
+    if len(match) != tmpl.GetNumAtoms():
+        raise ValueError('the prediction does not map onto the input molecule')
+
+    mol = Chem.Mol(tmpl)
+    predicted = pred.GetConformer().GetPositions()
+    conf = Chem.Conformer(mol.GetNumAtoms())
+    for tmplIdx, predIdx in enumerate(match):
+        conf.SetAtomPosition(tmplIdx, Point3D(*map(float, predicted[predIdx])))
+    mol.AddConformer(conf, assignId=True)
+
     Chem.AssignStereochemistryFrom3D(mol)
     return mol
 

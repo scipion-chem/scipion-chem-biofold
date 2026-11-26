@@ -51,7 +51,13 @@ def poseStereoOK(poseFile, smiles):
         results = check_identity(pose, ref)['results']
     except Exception as e:
         return None, f'{type(e).__name__}: {e}'
-    return bool(results.get('stereo_tetrahedral', True)), None
+    verdict = results.get('stereo_tetrahedral')
+    if verdict is None:
+        # Nothing when the input defines no centre at all - do not trust
+        if not Chem.FindMolChiralCenters(ref, useLegacyImplementation=False):
+            return None, 'no stereocentre to compare'
+        return False
+    return bool(verdict), None
 
 
 def gate(workDir, outDir):
